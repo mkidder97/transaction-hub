@@ -42,20 +42,57 @@ interface ReceiptItem {
   id: string;
   file: File;
   previewUrl: string;
+  compressedSize?: number;
   status: ItemStatus;
   errorMessage?: string;
-  // Upload result
   storagePath?: string;
   publicUrl?: string;
-  // OCR result
   ocrResult?: OcrResult;
   ocrProgress: number;
-  // Editable fields
   vendor: string;
   amount: string;
   date: string;
   categoryId: string;
   notes: string;
+}
+
+async function compressImage(file: File, maxDim = 1200): Promise<Blob> {
+  if (file.type === "application/pdf") return file;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Compression failed"))),
+        "image/jpeg",
+        0.8,
+      );
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error("Failed to load image")); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadWithRetry(
+  storagePath: string,
+  blob: Blob,
+  contentType: string,
+  retries = 3,
+): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const { error } = await supabase.storage
+      .from("receipts")
+      .upload(storagePath, blob, { contentType, upsert: false });
+    if (!error) return;
+    if (attempt === retries) throw error;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 const MAX_FILES = 20;

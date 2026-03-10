@@ -74,7 +74,23 @@ const ImportTransactions = () => {
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
 
-  // -- Screenshot handlers --
+  // Import history state
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(true);
+
+  const fetchBatches = useCallback(async () => {
+    setBatchesLoading(true);
+    const { data } = await supabase
+      .from("import_batches")
+      .select("id, created_at, source, filename, total_rows, imported_rows, status, importer:profiles!import_batches_imported_by_fkey(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setBatches(data as unknown as ImportBatch[]);
+    setBatchesLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBatches(); }, [fetchBatches]);
+
   const handleScreenshot = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

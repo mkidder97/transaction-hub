@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,9 +22,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { runOcrRaw, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
+
+interface ImportBatch {
+  id: string;
+  created_at: string;
+  source: string;
+  filename: string | null;
+  total_rows: number | null;
+  imported_rows: number | null;
+  status: string;
+  importer: { full_name: string | null } | null;
+}
 
 const REQUIRED_FIELDS = ["date", "vendor", "amount", "card_last_four"] as const;
 type MappableField = (typeof REQUIRED_FIELDS)[number];
@@ -61,7 +74,23 @@ const ImportTransactions = () => {
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
 
-  // -- Screenshot handlers --
+  // Import history state
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(true);
+
+  const fetchBatches = useCallback(async () => {
+    setBatchesLoading(true);
+    const { data } = await supabase
+      .from("import_batches")
+      .select("id, created_at, source, filename, total_rows, imported_rows, status, importer:profiles!import_batches_imported_by_fkey(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (data) setBatches(data as unknown as ImportBatch[]);
+    setBatchesLoading(false);
+  }, []);
+
+  useEffect(() => { fetchBatches(); }, [fetchBatches]);
+
   const handleScreenshot = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -143,6 +172,7 @@ const ImportTransactions = () => {
         .eq("id", batch.id);
 
       toast.success(`${sourceRows.length} transactions imported successfully!`);
+      fetchBatches();
 
       if (source === "screenshot") {
         setRows([]);
@@ -454,6 +484,76 @@ const ImportTransactions = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Import History */}
+      <Separator />
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <History className="h-5 w-5" /> Import History
+        </h2>
+        {batchesLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : batches.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No imports yet.</p>
+        ) : (
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Filename</TableHead>
+                  <TableHead>Imported By</TableHead>
+                  <TableHead>Rows</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {batches.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {new Date(b.created_at).toLocaleDateString()}{" "}
+                      <span className="text-muted-foreground text-xs">
+                        {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {b.source === "screenshot" ? "Screenshot" : "CSV"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm truncate max-w-[160px]">
+                      {b.filename ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {b.importer?.full_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {b.imported_rows ?? 0} / {b.total_rows ?? 0}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] px-1.5 py-0 ${
+                          b.status === "complete"
+                            ? "bg-accent/15 text-accent"
+                            : b.status === "processing"
+                            ? "bg-warning/15 text-warning"
+                            : b.status === "failed"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {b.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

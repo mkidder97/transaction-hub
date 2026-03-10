@@ -1,0 +1,1 @@
+UPDATE public.profiles SET role = 'admin', full_name = 'Michael Kidder' WHERE email = 'mkidder@southernroof.biz';

@@ -8,7 +8,6 @@ import RoleRedirect from "@/components/RoleRedirect";
 import AppLayout from "@/components/AppLayout";
 import RoleGuard from "@/components/RoleGuard";
 import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
 import NotFound from "@/pages/NotFound";
 
 // Employee pages
@@ -22,6 +21,7 @@ import AdminReceipts from "@/pages/admin/Receipts";
 import ImportTransactions from "@/pages/admin/ImportTransactions";
 import Reconciliation from "@/pages/admin/Reconciliation";
 import AdminSettings from "@/pages/admin/Settings";
+import AdminUsers from "@/pages/admin/Users";
 
 const queryClient = new QueryClient();
 
@@ -35,7 +35,6 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
 
             {/* Role-based redirect */}
             <Route path="/" element={<RoleRedirect />} />
@@ -55,6 +54,7 @@ const App = () => (
               <Route path="/admin/import" element={<RoleGuard allowedRole="admin"><ImportTransactions /></RoleGuard>} />
               <Route path="/admin/reconciliation" element={<RoleGuard allowedRole="admin"><Reconciliation /></RoleGuard>} />
               <Route path="/admin/settings" element={<RoleGuard allowedRole="admin"><AdminSettings /></RoleGuard>} />
+              <Route path="/admin/users" element={<RoleGuard allowedRole="admin"><AdminUsers /></RoleGuard>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

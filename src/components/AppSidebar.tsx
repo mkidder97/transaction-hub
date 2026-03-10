@@ -6,6 +6,7 @@ import {
   FileText,
   GitCompare,
   Settings,
+  Users,
   Receipt as ReceiptIcon,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";

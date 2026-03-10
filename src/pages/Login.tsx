@@ -74,13 +74,6 @@ const Login = () => {
                 {submitting ? "Signing in…" : "Sign in"}
               </Button>
             </form>
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </CardContent>
         </Card>
       </div>
     </div>

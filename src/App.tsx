@@ -34,7 +34,6 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
 
             {/* Role-based redirect */}
             <Route path="/" element={<RoleRedirect />} />

@@ -43,18 +43,18 @@ const App = () => (
 
             {/* Employee routes */}
             <Route element={<AppLayout />}>
-              <Route path="/employee/receipts" element={<EmployeeReceipts />} />
-              <Route path="/employee/submit" element={<SubmitReceipt />} />
-              <Route path="/employee/transactions" element={<EmployeeTransactions />} />
+              <Route path="/employee/receipts" element={<RoleGuard allowedRole="employee"><EmployeeReceipts /></RoleGuard>} />
+              <Route path="/employee/submit" element={<RoleGuard allowedRole="employee"><SubmitReceipt /></RoleGuard>} />
+              <Route path="/employee/transactions" element={<RoleGuard allowedRole="employee"><EmployeeTransactions /></RoleGuard>} />
             </Route>
 
             {/* Admin routes */}
             <Route element={<AppLayout />}>
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/receipts" element={<AdminReceipts />} />
-              <Route path="/admin/import" element={<ImportTransactions />} />
-              <Route path="/admin/reconciliation" element={<Reconciliation />} />
-              <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/dashboard" element={<RoleGuard allowedRole="admin"><AdminDashboard /></RoleGuard>} />
+              <Route path="/admin/receipts" element={<RoleGuard allowedRole="admin"><AdminReceipts /></RoleGuard>} />
+              <Route path="/admin/import" element={<RoleGuard allowedRole="admin"><ImportTransactions /></RoleGuard>} />
+              <Route path="/admin/reconciliation" element={<RoleGuard allowedRole="admin"><Reconciliation /></RoleGuard>} />
+              <Route path="/admin/settings" element={<RoleGuard allowedRole="admin"><AdminSettings /></RoleGuard>} />
             </Route>
 
             <Route path="*" element={<NotFound />} />

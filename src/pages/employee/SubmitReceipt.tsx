@@ -322,7 +322,14 @@ const SubmitReceipt = () => {
                   className="w-16 h-20 object-cover rounded border border-border flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0 space-y-1">
-                  <p className="text-sm font-medium truncate">{item.file.name}</p>
+                  <p className="text-sm font-medium truncate">
+                    {item.file.name}
+                    {item.compressedSize && (
+                      <span className="text-muted-foreground font-normal ml-1">
+                        ({(item.compressedSize / 1024).toFixed(0)} KB)
+                      </span>
+                    )}
+                  </p>
 
                   {item.status === "uploading" && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

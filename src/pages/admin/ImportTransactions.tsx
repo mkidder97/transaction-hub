@@ -172,6 +172,7 @@ const ImportTransactions = () => {
         .eq("id", batch.id);
 
       toast.success(`${sourceRows.length} transactions imported successfully!`);
+      fetchBatches();
 
       if (source === "screenshot") {
         setRows([]);

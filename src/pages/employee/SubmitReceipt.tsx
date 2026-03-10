@@ -188,9 +188,9 @@ const SubmitReceipt = () => {
 
       setItems((prev) => [...prev, ...newItems]);
 
-      // Process all files (limit concurrency to 3)
+      // Process sequentially to avoid saturating mobile connections
       const queue = [...newItems];
-      const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+      const workers = Array.from({ length: 1 }, async () => {
         while (queue.length > 0) {
           const next = queue.shift();
           if (next) await processFile(next);

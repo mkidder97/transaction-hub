@@ -69,10 +69,10 @@ function extractVendor(text: string): string | null {
   return lines[0] ?? null;
 }
 
-export async function runOcr(
+export async function runOcrRaw(
   imageSource: string,
   onProgress?: (progress: number) => void,
-): Promise<OcrResult> {
+): Promise<string> {
   const result = await Tesseract.recognize(imageSource, "eng", {
     logger: (m) => {
       if (m.status === "recognizing text" && onProgress) {
@@ -80,8 +80,14 @@ export async function runOcr(
       }
     },
   });
+  return result.data.text;
+}
 
-  const rawText = result.data.text;
+export async function runOcr(
+  imageSource: string,
+  onProgress?: (progress: number) => void,
+): Promise<OcrResult> {
+  const rawText = await runOcrRaw(imageSource, onProgress);
   const vendor = extractVendor(rawText);
   const amount = extractAmount(rawText);
   const date = extractDate(rawText);
@@ -99,4 +105,47 @@ export async function runOcr(
     ai_confidence: confidence,
     ai_raw_text: rawText,
   };
+}
+
+export interface ParsedTransactionRow {
+  date: string;
+  vendor: string;
+  amount: string;
+  card_last_four: string;
+}
+
+export function parseTransactionRows(rawText: string): ParsedTransactionRow[] {
+  const lines = rawText.split("\n").map((l) => l.trim()).filter((l) => l.length > 5);
+  const rows: ParsedTransactionRow[] = [];
+
+  const dateRe = /(\d{1,2})[\/\-](\d{1,2})[\/\-](20\d{2}|\d{2})/;
+  const amountRe = /\$?\s?([\d,]+\.\d{2})/;
+
+  for (const line of lines) {
+    const dateMatch = line.match(dateRe);
+    const amountMatch = line.match(amountRe);
+    if (!dateMatch || !amountMatch) continue;
+
+    let year = dateMatch[3];
+    if (year.length === 2) year = "20" + year;
+    const dateStr = `${year}-${dateMatch[1].padStart(2, "0")}-${dateMatch[2].padStart(2, "0")}`;
+
+    const amountVal = amountMatch[1].replace(/,/g, "");
+
+    // Vendor is the text between date and amount
+    const dateEnd = dateMatch.index! + dateMatch[0].length;
+    const amountStart = amountMatch.index!;
+    let vendor = line.slice(dateEnd, amountStart).trim();
+    if (!vendor) {
+      // Try text after amount
+      vendor = line.slice(amountMatch.index! + amountMatch[0].length).trim();
+    }
+    // Clean up vendor
+    vendor = vendor.replace(/^[\s\-–—]+|[\s\-–—]+$/g, "").trim();
+    if (!vendor) vendor = "Unknown";
+
+    rows.push({ date: dateStr, vendor, amount: amountVal, card_last_four: "" });
+  }
+
+  return rows;
 }

@@ -136,6 +136,7 @@ export function parseTransactionList(rawText: string): ParsedTransaction[] {
       // Look ahead up to 2 lines for date and amount
       let foundDate: string | null = null;
       let foundAmount: number | null = null;
+      let lastConsumed = i;
 
       for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
         const ahead = lines[j];
@@ -145,6 +146,7 @@ export function parseTransactionList(rawText: string): ParsedTransaction[] {
             const d = new Date(dm[0]);
             if (!isNaN(d.getTime())) {
               foundDate = d.toISOString().split("T")[0];
+              if (j > lastConsumed) lastConsumed = j;
             }
           }
         }
@@ -152,6 +154,7 @@ export function parseTransactionList(rawText: string): ParsedTransaction[] {
           const am = ahead.match(amountRe);
           if (am) {
             foundAmount = parseFloat(am[1].replace(/,/g, ""));
+            if (j > lastConsumed) lastConsumed = j;
           }
         }
       }
@@ -171,7 +174,7 @@ export function parseTransactionList(rawText: string): ParsedTransaction[] {
 
       if (foundDate && foundAmount !== null) {
         results.push({ vendor: line.replace(dateRe, "").replace(amountRe, "").trim() || line, date: foundDate, amount: foundAmount });
-        i += 3; // skip past the consumed lines
+        i = lastConsumed + 1; // advance past only the lines actually consumed
         continue;
       }
     }

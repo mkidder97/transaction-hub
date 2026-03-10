@@ -26,7 +26,7 @@ import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { runOcrRaw, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
+import { runOcrRaw, parseTransactionList, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
 
 interface ImportBatch {
   id: string;

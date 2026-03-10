@@ -107,6 +107,80 @@ export async function runOcr(
   };
 }
 
+export interface ParsedTransaction {
+  vendor: string;
+  date: string;
+  amount: number;
+}
+
+const SKIP_PATTERNS = /sort by|transactions|filter|card ending|present|balance/i;
+
+export function parseTransactionList(rawText: string): ParsedTransaction[] {
+  const lines = rawText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const results: ParsedTransaction[] = [];
+
+  const dateRe = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{1,2},?\s+\d{4}\b/i;
+  const amountRe = /\$\s?([\d,]+\.\d{2})/;
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Skip header/noise lines
+    if (SKIP_PATTERNS.test(line)) { i++; continue; }
+
+    // Vendor candidate: non-numeric string > 2 chars, doesn't start with $ or digit
+    const isVendorCandidate = line.length > 2 && !/^\d/.test(line) && !/^\$/.test(line);
+
+    if (isVendorCandidate) {
+      // Look ahead up to 2 lines for date and amount
+      let foundDate: string | null = null;
+      let foundAmount: number | null = null;
+
+      for (let j = i + 1; j <= Math.min(i + 2, lines.length - 1); j++) {
+        const ahead = lines[j];
+        if (!foundDate) {
+          const dm = ahead.match(dateRe);
+          if (dm) {
+            const d = new Date(dm[0]);
+            if (!isNaN(d.getTime())) {
+              foundDate = d.toISOString().split("T")[0];
+            }
+          }
+        }
+        if (foundAmount === null) {
+          const am = ahead.match(amountRe);
+          if (am) {
+            foundAmount = parseFloat(am[1].replace(/,/g, ""));
+          }
+        }
+      }
+
+      // Also check the vendor line itself for date/amount (in case they're on the same line)
+      if (!foundDate) {
+        const dm = line.match(dateRe);
+        if (dm) {
+          const d = new Date(dm[0]);
+          if (!isNaN(d.getTime())) foundDate = d.toISOString().split("T")[0];
+        }
+      }
+      if (foundAmount === null) {
+        const am = line.match(amountRe);
+        if (am) foundAmount = parseFloat(am[1].replace(/,/g, ""));
+      }
+
+      if (foundDate && foundAmount !== null) {
+        results.push({ vendor: line.replace(dateRe, "").replace(amountRe, "").trim() || line, date: foundDate, amount: foundAmount });
+        i += 3; // skip past the consumed lines
+        continue;
+      }
+    }
+    i++;
+  }
+
+  return results;
+}
+
 export interface ParsedTransactionRow {
   date: string;
   vendor: string;

@@ -20,48 +20,53 @@ import {
   Camera,
   Upload,
   Loader2,
-  ImageIcon,
   ScanSearch,
   Send,
+  CheckCircle2,
+  XCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
 import { runOcr, type OcrResult } from "@/lib/ocr";
 
-interface UploadData {
-  storagePath: string;
-  publicUrl: string;
-}
-
 interface Category {
   id: string;
   name: string;
 }
 
+type ItemStatus = "uploading" | "ocr" | "ready" | "error" | "submitting" | "done";
+
+interface ReceiptItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  status: ItemStatus;
+  errorMessage?: string;
+  // Upload result
+  storagePath?: string;
+  publicUrl?: string;
+  // OCR result
+  ocrResult?: OcrResult;
+  ocrProgress: number;
+  // Editable fields
+  vendor: string;
+  amount: string;
+  date: string;
+  categoryId: string;
+  notes: string;
+}
+
+const MAX_FILES = 20;
+
 const SubmitReceipt = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [preview, setPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadData, setUploadData] = useState<UploadData | null>(null);
-
-  // OCR
-  const [ocrRunning, setOcrRunning] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
-  const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
-
-  // Form fields
-  const [vendor, setVendor] = useState("");
-  const [amount, setAmount] = useState("");
-  const [date, setDate] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  // Categories
+  const [items, setItems] = useState<ReceiptItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [submittingAll, setSubmittingAll] = useState(false);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -77,213 +82,319 @@ const SubmitReceipt = () => {
       });
   }, []);
 
-  const handleFileSelect = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !user) return;
+  const updateItem = useCallback((id: string, patch: Partial<ReceiptItem>) => {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }, []);
 
-      const objectUrl = URL.createObjectURL(file);
-      setPreview(objectUrl);
-      setUploadData(null);
-      setOcrResult(null);
-      setOcrProgress(0);
-      setVendor("");
-      setAmount("");
-      setDate("");
-      setCategoryId("");
-      setNotes("");
+  const processFile = useCallback(
+    async (item: ReceiptItem) => {
+      if (!user) return;
 
-      // Upload to storage
-      setUploading(true);
-      let storagePath: string;
-      let publicUrl: string;
+      // Upload
       try {
-        const ext = file.name.split(".").pop() ?? "jpg";
+        const ext = item.file.name.split(".").pop() ?? "jpg";
         const monthFolder = format(new Date(), "yyyy-MM");
-        storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.${ext}`;
+        const storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.${ext}`;
 
         const { error: uploadError } = await supabase.storage
           .from("receipts")
-          .upload(storagePath, file, { contentType: file.type, upsert: false });
+          .upload(storagePath, item.file, { contentType: item.file.type, upsert: false });
         if (uploadError) throw uploadError;
 
-        const { data: urlData } = supabase.storage
-          .from("receipts")
-          .getPublicUrl(storagePath);
-        publicUrl = urlData.publicUrl;
+        const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(storagePath);
 
-        setUploadData({ storagePath, publicUrl });
+        updateItem(item.id, { storagePath, publicUrl: urlData.publicUrl, status: "ocr" });
+
+        // OCR
+        const result = await runOcr(item.previewUrl, (p) => {
+          updateItem(item.id, { ocrProgress: p });
+        });
+
+        updateItem(item.id, {
+          status: "ready",
+          ocrResult: result,
+          vendor: result.vendor_extracted ?? "",
+          amount: result.amount_extracted != null ? String(result.amount_extracted) : "",
+          date: result.date_extracted ?? "",
+          ocrProgress: 1,
+        });
       } catch (err: any) {
-        toast.error(err.message ?? "Upload failed");
-        setPreview(null);
-        setUploading(false);
-        return;
-      }
-      setUploading(false);
-
-      // OCR
-      setOcrRunning(true);
-      try {
-        const result = await runOcr(objectUrl, setOcrProgress);
-        setOcrResult(result);
-        // Pre-fill form
-        setVendor(result.vendor_extracted ?? "");
-        setAmount(result.amount_extracted != null ? String(result.amount_extracted) : "");
-        setDate(result.date_extracted ?? "");
-      } catch {
-        toast.error("OCR extraction failed");
-      } finally {
-        setOcrRunning(false);
+        updateItem(item.id, { status: "error", errorMessage: err.message ?? "Processing failed" });
       }
     },
-    [user],
+    [user, updateItem],
   );
 
-  const handleSubmit = async () => {
-    if (!user || !uploadData || !ocrResult) return;
-    setSubmitting(true);
-    try {
-      const { error } = await supabase.from("receipts").insert({
-        user_id: user.id,
-        photo_url: uploadData.publicUrl,
-        storage_path: uploadData.storagePath,
-        vendor_extracted: ocrResult.vendor_extracted,
-        amount_extracted: ocrResult.amount_extracted,
-        date_extracted: ocrResult.date_extracted,
-        ai_raw_text: ocrResult.ai_raw_text,
-        ai_confidence: ocrResult.ai_confidence,
-        vendor_confirmed: vendor || null,
-        amount_confirmed: amount ? parseFloat(amount) : null,
-        date_confirmed: date || null,
-        category_id: categoryId || null,
-        notes: notes || null,
-        status: "pending",
+  const handleFilesSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0 || !user) return;
+
+      const fileArray = Array.from(files).slice(0, MAX_FILES);
+      if (files.length > MAX_FILES) {
+        toast.warning(`Only the first ${MAX_FILES} photos were added.`);
+      }
+
+      const newItems: ReceiptItem[] = fileArray.map((file) => ({
+        id: uuidv4(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        status: "uploading" as ItemStatus,
+        ocrProgress: 0,
+        vendor: "",
+        amount: "",
+        date: "",
+        categoryId: "",
+        notes: "",
+      }));
+
+      setItems((prev) => [...prev, ...newItems]);
+
+      // Process all files (limit concurrency to 3)
+      const queue = [...newItems];
+      const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (next) await processFile(next);
+        }
       });
+      await Promise.all(workers);
+
+      // Reset input so the same files can be selected again
+      e.target.value = "";
+    },
+    [user, processFile],
+  );
+
+  const removeItem = useCallback((id: string) => {
+    setItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((i) => i.id !== id);
+    });
+  }, []);
+
+  const handleSubmitAll = async () => {
+    if (!user) return;
+    const readyItems = items.filter((i) => i.status === "ready");
+    if (readyItems.length === 0) {
+      toast.error("No receipts ready to submit.");
+      return;
+    }
+
+    setSubmittingAll(true);
+
+    const rows = readyItems.map((item) => ({
+      user_id: user.id,
+      photo_url: item.publicUrl!,
+      storage_path: item.storagePath!,
+      vendor_extracted: item.ocrResult?.vendor_extracted ?? null,
+      amount_extracted: item.ocrResult?.amount_extracted ?? null,
+      date_extracted: item.ocrResult?.date_extracted ?? null,
+      ai_raw_text: item.ocrResult?.ai_raw_text ?? null,
+      ai_confidence: item.ocrResult?.ai_confidence ?? null,
+      vendor_confirmed: item.vendor || null,
+      amount_confirmed: item.amount ? parseFloat(item.amount) : null,
+      date_confirmed: item.date || null,
+      category_id: item.categoryId || null,
+      notes: item.notes || null,
+      status: "pending",
+    }));
+
+    try {
+      const { error } = await supabase.from("receipts").insert(rows);
       if (error) throw error;
-      toast.success("Receipt submitted successfully!");
-      navigate("/employee/receipts");
+
+      // Mark all as done
+      setItems((prev) =>
+        prev.map((i) => (readyItems.some((r) => r.id === i.id) ? { ...i, status: "done" as ItemStatus } : i)),
+      );
+      toast.success(`${readyItems.length} receipt(s) submitted!`);
+      setTimeout(() => navigate("/employee/receipts"), 1200);
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to submit receipt");
+      toast.error(err.message ?? "Failed to submit receipts");
     } finally {
-      setSubmitting(false);
+      setSubmittingAll(false);
     }
   };
 
-  const confidenceBadge = (score: number) => {
-    if (score > 0.8)
-      return <Badge className="bg-accent text-accent-foreground">{Math.round(score * 100)}% confidence</Badge>;
-    if (score >= 0.5)
-      return <Badge className="bg-warning text-warning-foreground">{Math.round(score * 100)}% confidence</Badge>;
-    return <Badge className="bg-destructive text-destructive-foreground">{Math.round(score * 100)}% confidence</Badge>;
+  const readyCount = items.filter((i) => i.status === "ready").length;
+  const processingCount = items.filter((i) => i.status === "uploading" || i.status === "ocr").length;
+  const doneCount = items.filter((i) => i.status === "done").length;
+
+  const confidenceColor = (score: number) => {
+    if (score > 0.8) return "bg-accent text-accent-foreground";
+    if (score >= 0.5) return "bg-warning text-warning-foreground";
+    return "bg-destructive text-destructive-foreground";
   };
 
   return (
-    <div className="space-y-6 max-w-lg mx-auto">
+    <div className="space-y-6 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold">Submit Receipt</h1>
+        <h1 className="text-2xl font-bold">Submit Receipts</h1>
         <p className="text-muted-foreground text-sm">
-          Snap a photo or upload an image of your receipt.
+          Select up to {MAX_FILES} photos at once. Review extracted data, then submit all.
         </p>
       </div>
 
       {/* Upload buttons */}
       <div className="flex gap-3">
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
-        <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileSelect} />
-        <Button variant="outline" className="flex-1 h-12 gap-2" onClick={() => cameraRef.current?.click()} disabled={uploading || ocrRunning || submitting}>
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFilesSelect} />
+        <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFilesSelect} />
+        <Button variant="outline" className="flex-1 h-12 gap-2" onClick={() => cameraRef.current?.click()} disabled={submittingAll}>
           <Camera className="h-5 w-5" /> Camera
         </Button>
-        <Button variant="outline" className="flex-1 h-12 gap-2" onClick={() => fileRef.current?.click()} disabled={uploading || ocrRunning || submitting}>
-          <Upload className="h-5 w-5" /> Upload File
+        <Button variant="outline" className="flex-1 h-12 gap-2" onClick={() => fileRef.current?.click()} disabled={submittingAll}>
+          <Upload className="h-5 w-5" /> Upload Photos
         </Button>
       </div>
 
-      {/* Preview */}
-      {(preview || uploading) && (
-        <Card className="overflow-hidden">
-          <CardContent className="p-0 relative">
-            {preview ? (
-              <img src={preview} alt="Receipt preview" className="w-full max-h-[420px] object-contain bg-muted" />
-            ) : (
-              <div className="flex items-center justify-center h-48 bg-muted">
-                <ImageIcon className="h-10 w-10 text-muted-foreground" />
-              </div>
-            )}
-            {uploading && (
-              <div className="absolute inset-0 bg-background/70 flex flex-col items-center justify-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="text-sm font-medium">Uploading…</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* OCR progress */}
-      {ocrRunning && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <ScanSearch className="h-4 w-4 animate-pulse text-primary" />
-            Extracting receipt data…
-          </div>
-          <Progress value={Math.round(ocrProgress * 100)} className="h-2" />
+      {/* Status summary */}
+      {items.length > 0 && (
+        <div className="flex items-center gap-3 text-sm">
+          <span className="font-medium">{items.length} photo(s)</span>
+          {processingCount > 0 && (
+            <Badge variant="secondary" className="gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" /> {processingCount} processing
+            </Badge>
+          )}
+          {readyCount > 0 && (
+            <Badge className="bg-accent text-accent-foreground gap-1">
+              <CheckCircle2 className="h-3 w-3" /> {readyCount} ready
+            </Badge>
+          )}
+          {doneCount > 0 && (
+            <Badge variant="outline" className="gap-1">
+              {doneCount} submitted
+            </Badge>
+          )}
         </div>
       )}
 
-      {/* Review form */}
-      {ocrResult && !ocrRunning && (
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Review Extracted Data</h2>
-              {confidenceBadge(ocrResult.ai_confidence)}
-            </div>
+      {/* Receipt queue */}
+      <div className="space-y-4">
+        {items.map((item) => (
+          <Card key={item.id} className="overflow-hidden">
+            <CardContent className="p-3 space-y-3">
+              {/* Header row: thumbnail + status */}
+              <div className="flex gap-3 items-start">
+                <img
+                  src={item.previewUrl}
+                  alt="Receipt"
+                  className="w-16 h-20 object-cover rounded border border-border flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0 space-y-1">
+                  <p className="text-sm font-medium truncate">{item.file.name}</p>
 
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="vendor">Vendor</Label>
-                <Input id="vendor" value={vendor} onChange={(e) => setVendor(e.target.value)} placeholder="Store or vendor name" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount">Amount ($)</Label>
-                  <Input id="amount" type="number" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                  {item.status === "uploading" && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                    </div>
+                  )}
+                  {item.status === "ocr" && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <ScanSearch className="h-3.5 w-3.5 animate-pulse text-primary" /> Extracting data…
+                      </div>
+                      <Progress value={Math.round(item.ocrProgress * 100)} className="h-1.5" />
+                    </div>
+                  )}
+                  {item.status === "error" && (
+                    <div className="flex items-center gap-2 text-sm text-destructive">
+                      <XCircle className="h-3.5 w-3.5" /> {item.errorMessage}
+                    </div>
+                  )}
+                  {item.status === "done" && (
+                    <div className="flex items-center gap-2 text-sm text-accent-foreground">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Submitted
+                    </div>
+                  )}
+                  {item.status === "ready" && item.ocrResult && (
+                    <Badge className={confidenceColor(item.ocrResult.ai_confidence)}>
+                      {Math.round(item.ocrResult.ai_confidence * 100)}% confidence
+                    </Badge>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                {(item.status === "ready" || item.status === "error") && (
+                  <Button variant="ghost" size="icon" className="h-8 w-8 flex-shrink-0" onClick={() => removeItem(item.id)}>
+                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Editable fields – only when ready */}
+              {item.status === "ready" && (
+                <div className="space-y-2.5 pt-1 border-t border-border">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Vendor</Label>
+                    <Input
+                      value={item.vendor}
+                      onChange={(e) => updateItem(item.id, { vendor: e.target.value })}
+                      placeholder="Store or vendor name"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Amount ($)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.amount}
+                        onChange={(e) => updateItem(item.id, { amount: e.target.value })}
+                        placeholder="0.00"
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Date</Label>
+                      <Input
+                        type="date"
+                        value={item.date}
+                        onChange={(e) => updateItem(item.id, { date: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Category</Label>
+                    <Select value={item.categoryId} onValueChange={(v) => updateItem(item.id, { categoryId: v })}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Notes (optional)</Label>
+                    <Textarea
+                      value={item.notes}
+                      onChange={(e) => updateItem(item.id, { notes: e.target.value })}
+                      placeholder="Any additional details…"
+                      rows={1}
+                      className="text-sm min-h-[32px]"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="category">Category</Label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
-                  <SelectTrigger id="category">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="notes">Notes (optional)</Label>
-                <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any additional details…" rows={2} />
-              </div>
-            </div>
-
-            <Button className="w-full gap-2" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit Receipt
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Submit all button */}
+      {readyCount > 0 && (
+        <Button className="w-full gap-2 h-12" onClick={handleSubmitAll} disabled={submittingAll || processingCount > 0}>
+          {submittingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          Submit {readyCount} Receipt{readyCount !== 1 ? "s" : ""}
+        </Button>
       )}
     </div>
   );

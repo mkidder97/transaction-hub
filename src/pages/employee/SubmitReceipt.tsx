@@ -127,25 +127,26 @@ const SubmitReceipt = () => {
     async (item: ReceiptItem) => {
       if (!user) return;
 
-      // Upload
       try {
-        const ext = item.file.name.split(".").pop() ?? "jpg";
-        const monthFolder = format(new Date(), "yyyy-MM");
-        const storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.${ext}`;
+        // Compress
+        const compressed = await compressImage(item.file);
+        const compressedUrl = URL.createObjectURL(compressed);
+        updateItem(item.id, { compressedSize: compressed.size });
 
-        const { error: uploadError } = await supabase.storage
-          .from("receipts")
-          .upload(storagePath, item.file, { contentType: item.file.type, upsert: false });
-        if (uploadError) throw uploadError;
+        // Upload with retry
+        const monthFolder = format(new Date(), "yyyy-MM");
+        const storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.jpg`;
+
+        await uploadWithRetry(storagePath, compressed, "image/jpeg");
 
         const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(storagePath);
-
         updateItem(item.id, { storagePath, publicUrl: urlData.publicUrl, status: "ocr" });
 
-        // OCR
-        const result = await runOcr(item.previewUrl, (p) => {
+        // OCR on compressed image
+        const result = await runOcr(compressedUrl, (p) => {
           updateItem(item.id, { ocrProgress: p });
         });
+        URL.revokeObjectURL(compressedUrl);
 
         updateItem(item.id, {
           status: "ready",

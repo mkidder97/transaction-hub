@@ -26,7 +26,7 @@ import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { runOcrRaw, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
+import { runOcrRaw, parseTransactionList, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
 
 interface ImportBatch {
   id: string;
@@ -101,9 +101,15 @@ const ImportTransactions = () => {
     setOcrProgress(0);
     try {
       const rawText = await runOcrRaw(url, setOcrProgress);
-      const parsed = parseTransactionRows(rawText);
-      setRows(parsed);
-      if (parsed.length === 0) toast.info("No transaction rows detected in the image.");
+      const parsed = parseTransactionList(rawText);
+      const asRows: ParsedTransactionRow[] = parsed.map((t) => ({
+        date: t.date,
+        vendor: t.vendor,
+        amount: String(t.amount),
+        card_last_four: "",
+      }));
+      setRows(asRows);
+      if (asRows.length === 0) toast.error("No transactions detected — try a clearer screenshot of your transaction list.");
     } catch {
       toast.error("OCR extraction failed");
     } finally {

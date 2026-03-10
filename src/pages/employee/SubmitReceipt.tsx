@@ -42,20 +42,57 @@ interface ReceiptItem {
   id: string;
   file: File;
   previewUrl: string;
+  compressedSize?: number;
   status: ItemStatus;
   errorMessage?: string;
-  // Upload result
   storagePath?: string;
   publicUrl?: string;
-  // OCR result
   ocrResult?: OcrResult;
   ocrProgress: number;
-  // Editable fields
   vendor: string;
   amount: string;
   date: string;
   categoryId: string;
   notes: string;
+}
+
+async function compressImage(file: File, maxDim = 1200): Promise<Blob> {
+  if (file.type === "application/pdf") return file;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error("Compression failed"))),
+        "image/jpeg",
+        0.8,
+      );
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); reject(new Error("Failed to load image")); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function uploadWithRetry(
+  storagePath: string,
+  blob: Blob,
+  contentType: string,
+  retries = 3,
+): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const { error } = await supabase.storage
+      .from("receipts")
+      .upload(storagePath, blob, { contentType, upsert: false });
+    if (!error) return;
+    if (attempt === retries) throw error;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 const MAX_FILES = 20;
@@ -90,25 +127,26 @@ const SubmitReceipt = () => {
     async (item: ReceiptItem) => {
       if (!user) return;
 
-      // Upload
       try {
-        const ext = item.file.name.split(".").pop() ?? "jpg";
-        const monthFolder = format(new Date(), "yyyy-MM");
-        const storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.${ext}`;
+        // Compress
+        const compressed = await compressImage(item.file);
+        const compressedUrl = URL.createObjectURL(compressed);
+        updateItem(item.id, { compressedSize: compressed.size });
 
-        const { error: uploadError } = await supabase.storage
-          .from("receipts")
-          .upload(storagePath, item.file, { contentType: item.file.type, upsert: false });
-        if (uploadError) throw uploadError;
+        // Upload with retry
+        const monthFolder = format(new Date(), "yyyy-MM");
+        const storagePath = `receipts/${user.id}/${monthFolder}/${uuidv4()}.jpg`;
+
+        await uploadWithRetry(storagePath, compressed, "image/jpeg");
 
         const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(storagePath);
-
         updateItem(item.id, { storagePath, publicUrl: urlData.publicUrl, status: "ocr" });
 
-        // OCR
-        const result = await runOcr(item.previewUrl, (p) => {
+        // OCR on compressed image
+        const result = await runOcr(compressedUrl, (p) => {
           updateItem(item.id, { ocrProgress: p });
         });
+        URL.revokeObjectURL(compressedUrl);
 
         updateItem(item.id, {
           status: "ready",
@@ -150,9 +188,9 @@ const SubmitReceipt = () => {
 
       setItems((prev) => [...prev, ...newItems]);
 
-      // Process all files (limit concurrency to 3)
+      // Process sequentially to avoid saturating mobile connections
       const queue = [...newItems];
-      const workers = Array.from({ length: Math.min(3, queue.length) }, async () => {
+      const workers = Array.from({ length: 1 }, async () => {
         while (queue.length > 0) {
           const next = queue.shift();
           if (next) await processFile(next);
@@ -284,7 +322,14 @@ const SubmitReceipt = () => {
                   className="w-16 h-20 object-cover rounded border border-border flex-shrink-0"
                 />
                 <div className="flex-1 min-w-0 space-y-1">
-                  <p className="text-sm font-medium truncate">{item.file.name}</p>
+                  <p className="text-sm font-medium truncate">
+                    {item.file.name}
+                    {item.compressedSize && (
+                      <span className="text-muted-foreground font-normal ml-1">
+                        ({(item.compressedSize / 1024).toFixed(0)} KB)
+                      </span>
+                    )}
+                  </p>
 
                   {item.status === "uploading" && (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">

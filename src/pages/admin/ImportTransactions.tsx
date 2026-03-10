@@ -22,9 +22,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { runOcrRaw, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
+
+interface ImportBatch {
+  id: string;
+  created_at: string;
+  source: string;
+  filename: string | null;
+  total_rows: number | null;
+  imported_rows: number | null;
+  status: string;
+  importer: { full_name: string | null } | null;
+}
 
 const REQUIRED_FIELDS = ["date", "vendor", "amount", "card_last_four"] as const;
 type MappableField = (typeof REQUIRED_FIELDS)[number];

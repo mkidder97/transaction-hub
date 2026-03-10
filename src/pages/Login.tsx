@@ -74,6 +74,7 @@ const Login = () => {
                 {submitting ? "Signing in…" : "Sign in"}
               </Button>
             </form>
+          </CardContent>
         </Card>
       </div>
     </div>

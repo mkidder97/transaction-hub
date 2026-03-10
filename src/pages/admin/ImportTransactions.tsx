@@ -275,19 +275,19 @@ const ImportTransactions = () => {
         <TableBody>
           {data.map((r, i) => (
             <TableRow key={i}>
-              <TableCell>
-                <Input type="date" value={r.date} onChange={(e) => onUpdate(i, "date", e.target.value)} className="h-8 w-36" />
+              <TableCell className="w-[130px] min-w-[130px]">
+                <Input type="date" value={r.date} onChange={(e) => onUpdate(i, "date", e.target.value)} className="h-8 w-full" />
               </TableCell>
               <TableCell>
-                <Input value={r.vendor} onChange={(e) => onUpdate(i, "vendor", e.target.value)} className="h-8" />
+                <Input value={r.vendor} onChange={(e) => onUpdate(i, "vendor", e.target.value)} className="h-8 w-full" />
               </TableCell>
-              <TableCell>
-                <Input type="number" step="0.01" value={r.amount} onChange={(e) => onUpdate(i, "amount", e.target.value)} className="h-8 w-28" />
+              <TableCell className="w-[90px] min-w-[90px]">
+                <Input type="number" step="0.01" value={r.amount} onChange={(e) => onUpdate(i, "amount", e.target.value)} className="h-8 w-full" />
               </TableCell>
-              <TableCell>
-                <Input value={r.card_last_four} onChange={(e) => onUpdate(i, "card_last_four", e.target.value)} maxLength={4} className="h-8 w-20" />
+              <TableCell className="w-[80px] min-w-[80px]">
+                <Input value={r.card_last_four} onChange={(e) => onUpdate(i, "card_last_four", e.target.value)} maxLength={4} className="h-8 w-full" />
               </TableCell>
-              <TableCell>
+              <TableCell className="w-10">
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onRemove(i)}>
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>

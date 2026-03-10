@@ -39,6 +39,7 @@ const adminItems = [
   { title: "Import Transactions", url: "/admin/import", icon: Upload },
   { title: "Reconciliation", url: "/admin/reconciliation", icon: GitCompare },
   { title: "Settings", url: "/admin/settings", icon: Settings },
+  { title: "Users", url: "/admin/users", icon: Users },
 ];
 
 export function AppSidebar() {

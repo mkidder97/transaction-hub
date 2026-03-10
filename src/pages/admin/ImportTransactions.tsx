@@ -5,7 +5,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -17,6 +25,16 @@ import {
 import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { runOcrRaw, parseTransactionRows, type ParsedTransactionRow } from "@/lib/ocr";
+
+const REQUIRED_FIELDS = ["date", "vendor", "amount", "card_last_four"] as const;
+type MappableField = (typeof REQUIRED_FIELDS)[number];
+
+const FIELD_LABELS: Record<MappableField, string> = {
+  date: "Date",
+  vendor: "Vendor",
+  amount: "Amount",
+  card_last_four: "Card Last 4",
+};
 
 const ImportTransactions = () => {
   const { user } = useAuth();
@@ -30,7 +48,15 @@ const ImportTransactions = () => {
   const fileRef = useRef<HTMLInputElement>(null);
 
   // CSV tab state
-  const [csvRows, setCsvRows] = useState<ParsedTransactionRow[]>([]);
+  const [csvRawRows, setCsvRawRows] = useState<string[][]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvMapping, setCsvMapping] = useState<Record<MappableField, string>>({
+    date: "",
+    vendor: "",
+    amount: "",
+    card_last_four: "",
+  });
+  const [csvMapped, setCsvMapped] = useState<ParsedTransactionRow[]>([]);
   const [csvFilename, setCsvFilename] = useState<string | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
@@ -64,14 +90,13 @@ const ImportTransactions = () => {
     setRows((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // -- Shared import logic --
   const confirmImport = useCallback(async (sourceRows: ParsedTransactionRow[], source: string, filename: string | null) => {
     if (!user || sourceRows.length === 0) return;
-
     const setImportingFn = source === "screenshot" ? setImporting : setCsvImporting;
     setImportingFn(true);
 
     try {
-      // Create batch
       const { data: batch, error: batchErr } = await supabase
         .from("import_batches")
         .insert({
@@ -85,7 +110,6 @@ const ImportTransactions = () => {
         .single();
       if (batchErr || !batch) throw batchErr ?? new Error("Failed to create batch");
 
-      // Resolve card → user_id map
       const cards = [...new Set(sourceRows.map((r) => r.card_last_four).filter(Boolean))];
       const cardUserMap: Record<string, string> = {};
       if (cards.length > 0) {
@@ -100,7 +124,6 @@ const ImportTransactions = () => {
         }
       }
 
-      // Insert transactions
       const txRows = sourceRows.map((r) => ({
         import_batch_id: batch.id,
         source,
@@ -114,7 +137,6 @@ const ImportTransactions = () => {
       const { error: txErr } = await supabase.from("transactions").insert(txRows);
       if (txErr) throw txErr;
 
-      // Update batch
       await supabase
         .from("import_batches")
         .update({ status: "complete", imported_rows: sourceRows.length, failed_rows: 0 })
@@ -122,14 +144,16 @@ const ImportTransactions = () => {
 
       toast.success(`${sourceRows.length} transactions imported successfully!`);
 
-      // Reset
       if (source === "screenshot") {
         setRows([]);
         setPreview(null);
         if (fileRef.current) fileRef.current.value = "";
       } else {
-        setCsvRows([]);
+        setCsvRawRows([]);
+        setCsvHeaders([]);
+        setCsvMapped([]);
         setCsvFilename(null);
+        setCsvMapping({ date: "", vendor: "", amount: "", card_last_four: "" });
         if (csvRef.current) csvRef.current.value = "";
       }
     } catch (err: any) {
@@ -144,41 +168,52 @@ const ImportTransactions = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCsvFilename(file.name);
+    setCsvMapped([]);
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       if (lines.length < 2) { toast.info("CSV appears empty."); return; }
 
-      const header = lines[0].toLowerCase();
-      const cols = header.split(",");
-      const dateIdx = cols.findIndex((c) => c.includes("date"));
-      const vendorIdx = cols.findIndex((c) => c.includes("vendor") || c.includes("description") || c.includes("merchant"));
-      const amountIdx = cols.findIndex((c) => c.includes("amount") || c.includes("total"));
-      const cardIdx = cols.findIndex((c) => c.includes("card"));
+      const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+      setCsvHeaders(headers);
 
-      const parsed: ParsedTransactionRow[] = [];
-      for (let i = 1; i < lines.length; i++) {
-        const vals = lines[i].split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
-        parsed.push({
-          date: dateIdx >= 0 ? vals[dateIdx] ?? "" : "",
-          vendor: vendorIdx >= 0 ? vals[vendorIdx] ?? "" : "",
-          amount: amountIdx >= 0 ? (vals[amountIdx] ?? "").replace(/[$,]/g, "") : "",
-          card_last_four: cardIdx >= 0 ? vals[cardIdx] ?? "" : "",
-        });
-      }
-      setCsvRows(parsed);
+      const dataRows = lines.slice(1).map((l) => l.split(",").map((v) => v.trim().replace(/^"|"$/g, "")));
+      setCsvRawRows(dataRows);
+
+      // Auto-guess mapping
+      const lowerHeaders = headers.map((h) => h.toLowerCase());
+      const guessed: Record<MappableField, string> = { date: "", vendor: "", amount: "", card_last_four: "" };
+      const dateIdx = lowerHeaders.findIndex((h) => h.includes("date"));
+      if (dateIdx >= 0) guessed.date = headers[dateIdx];
+      const vendorIdx = lowerHeaders.findIndex((h) => h.includes("vendor") || h.includes("description") || h.includes("merchant"));
+      if (vendorIdx >= 0) guessed.vendor = headers[vendorIdx];
+      const amountIdx = lowerHeaders.findIndex((h) => h.includes("amount") || h.includes("total"));
+      if (amountIdx >= 0) guessed.amount = headers[amountIdx];
+      const cardIdx = lowerHeaders.findIndex((h) => h.includes("card"));
+      if (cardIdx >= 0) guessed.card_last_four = headers[cardIdx];
+      setCsvMapping(guessed);
     };
     reader.readAsText(file);
   }, []);
 
-  const updateCsvRow = (idx: number, field: keyof ParsedTransactionRow, value: string) => {
-    setCsvRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));
-  };
-
-  const removeCsvRow = (idx: number) => {
-    setCsvRows((prev) => prev.filter((_, i) => i !== idx));
-  };
+  const applyMapping = useCallback(() => {
+    const mapped: ParsedTransactionRow[] = csvRawRows.map((vals) => {
+      const get = (field: MappableField) => {
+        const col = csvMapping[field];
+        if (!col) return "";
+        const idx = csvHeaders.indexOf(col);
+        return idx >= 0 ? (vals[idx] ?? "") : "";
+      };
+      return {
+        date: get("date"),
+        vendor: get("vendor"),
+        amount: get("amount").replace(/[$,]/g, ""),
+        card_last_four: get("card_last_four"),
+      };
+    });
+    setCsvMapped(mapped);
+  }, [csvRawRows, csvHeaders, csvMapping]);
 
   // -- Shared editable table --
   const EditableTable = ({
@@ -289,22 +324,131 @@ const ImportTransactions = () => {
             {csvFilename && <span className="ml-3 text-sm text-muted-foreground">{csvFilename}</span>}
           </div>
 
-          {csvRows.length > 0 && (
+          {/* Column mapping UI */}
+          {csvHeaders.length > 0 && csvMapped.length === 0 && (
+            <Card>
+              <CardContent className="p-4 space-y-4">
+                <h3 className="text-sm font-semibold">Map CSV Columns</h3>
+                <p className="text-xs text-muted-foreground">
+                  Select which CSV column corresponds to each field.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {REQUIRED_FIELDS.map((field) => (
+                    <div key={field} className="space-y-1.5">
+                      <Label className="text-xs">{FIELD_LABELS[field]}</Label>
+                      <Select
+                        value={csvMapping[field]}
+                        onValueChange={(val) =>
+                          setCsvMapping((prev) => ({ ...prev, [field]: val }))
+                        }
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="— select column —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">— none —</SelectItem>
+                          {csvHeaders.map((h) => (
+                            <SelectItem key={h} value={h}>
+                              {h}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Raw preview */}
+                {csvRawRows.length > 0 && (
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {csvHeaders.map((h) => (
+                            <TableHead key={h} className="text-xs whitespace-nowrap">
+                              {h}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {csvRawRows.slice(0, 3).map((row, i) => (
+                          <TableRow key={i}>
+                            {row.map((cell, j) => (
+                              <TableCell key={j} className="text-xs py-1">
+                                {cell}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    <p className="text-[11px] text-muted-foreground px-3 py-1.5">
+                      Showing first {Math.min(3, csvRawRows.length)} of {csvRawRows.length} rows
+                    </p>
+                  </div>
+                )}
+
+                <Button className="gap-2" onClick={applyMapping}>
+                  <Check className="h-4 w-4" /> Apply Mapping
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Mapped preview + confirm */}
+          {csvMapped.length > 0 && (
             <>
-              <p className="text-sm text-muted-foreground">{csvRows.length} row(s) parsed — review and edit before importing.</p>
-              <EditableTable data={csvRows} onUpdate={updateCsvRow} onRemove={removeCsvRow} />
-              <Button className="gap-2" onClick={() => confirmImport(csvRows, "csv", csvFilename)} disabled={csvImporting}>
-                {csvImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Confirm Import ({csvRows.length})
-              </Button>
+              <p className="text-sm text-muted-foreground">
+                {csvMapped.length} row(s) mapped — preview first 5 rows, then confirm.
+              </p>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Card Last 4</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {csvMapped.slice(0, 5).map((r, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="text-sm">{r.date || "—"}</TableCell>
+                        <TableCell className="text-sm">{r.vendor || "—"}</TableCell>
+                        <TableCell className="text-sm">{r.amount ? `$${parseFloat(r.amount).toFixed(2)}` : "—"}</TableCell>
+                        <TableCell className="text-sm">{r.card_last_four || "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {csvMapped.length > 5 && (
+                  <p className="text-[11px] text-muted-foreground px-3 py-1.5">
+                    …and {csvMapped.length - 5} more rows
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setCsvMapped([])}
+                >
+                  Back to Mapping
+                </Button>
+                <Button className="gap-2" onClick={() => confirmImport(csvMapped, "csv", csvFilename)} disabled={csvImporting}>
+                  {csvImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Confirm Import ({csvMapped.length})
+                </Button>
+              </div>
             </>
           )}
 
-          {csvRows.length === 0 && csvFilename && (
+          {csvHeaders.length === 0 && csvFilename && (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
                 <ImageIcon className="h-10 w-10" />
-                <p className="text-sm">No rows parsed from CSV.</p>
+                <p className="text-sm">No data found in CSV.</p>
               </CardContent>
             </Card>
           )}

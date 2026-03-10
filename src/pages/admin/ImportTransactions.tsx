@@ -484,6 +484,76 @@ const ImportTransactions = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Import History */}
+      <Separator />
+      <div className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <History className="h-5 w-5" /> Import History
+        </h2>
+        {batchesLoading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : batches.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No imports yet.</p>
+        ) : (
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Filename</TableHead>
+                  <TableHead>Imported By</TableHead>
+                  <TableHead>Rows</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {batches.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {new Date(b.created_at).toLocaleDateString()}{" "}
+                      <span className="text-muted-foreground text-xs">
+                        {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {b.source === "screenshot" ? "Screenshot" : "CSV"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm truncate max-w-[160px]">
+                      {b.filename ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {b.importer?.full_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {b.imported_rows ?? 0} / {b.total_rows ?? 0}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={`text-[10px] px-1.5 py-0 ${
+                          b.status === "complete"
+                            ? "bg-accent/15 text-accent"
+                            : b.status === "processing"
+                            ? "bg-warning/15 text-warning"
+                            : b.status === "failed"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {b.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

@@ -128,6 +128,7 @@ export function AppSidebar() {
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+      </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border px-4 py-3">
         {!collapsed && (

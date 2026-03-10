@@ -42,6 +42,10 @@ const adminItems = [
   { title: "Users", url: "/admin/users", icon: Users },
 ];
 
+const adminExpenseItems = [
+  { title: "Submit Receipt", url: "/employee/submit", icon: Upload },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";

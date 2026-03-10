@@ -23,8 +23,9 @@ const Login = () => {
     setSubmitting(false);
     if (error) {
       toast.error(error.message);
+    } else {
+      navigate("/");
     }
-    // Redirect handled by AuthContext + routing
   };
 
   return (

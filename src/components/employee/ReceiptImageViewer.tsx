@@ -28,11 +28,9 @@ const AMOUNT_RE = /^\$?[\d,]+\.\d{2}$/;
 /* ────────────────────── zoom toolbar (inside wrapper) ────────────── */
 
 const ZoomToolbar = ({
-  scale,
   onRotate,
   onClose,
 }: {
-  scale: number;
   onRotate: () => void;
   onClose: () => void;
 }) => {
@@ -66,7 +64,9 @@ const ReceiptImageViewer = ({
   onAmountSelect,
 }: Props) => {
   const [rotation, setRotation] = useState(0);
-  const [scale, setScale] = useState(1);
+  const scaleRef = useRef(1);
+  const [scaleDisplay, setScaleDisplay] = useState(100);
+  const rafRef = useRef(0);
 
   // OCR state
   const [words, setWords] = useState<WordBox[]>([]);
@@ -91,7 +91,8 @@ const ReceiptImageViewer = ({
   useEffect(() => {
     if (open) {
       setRotation(0);
-      setScale(1);
+      scaleRef.current = 1;
+      setScaleDisplay(100);
       setWords([]);
       setOcrLoading(false);
       setMode(null);
@@ -227,20 +228,25 @@ const ReceiptImageViewer = ({
           initialScale={1}
           minScale={0.5}
           maxScale={5}
-          onTransformed={(_, state) => setScale(state.scale)}
+          onTransformed={(_, state) => {
+            scaleRef.current = state.scale;
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(() => {
+              setScaleDisplay(Math.round(state.scale * 100));
+            });
+          }}
           panning={{ disabled: false }}
           doubleClick={{ disabled: true }}
         >
           {/* Top toolbar */}
           <ZoomToolbar
-            scale={scale}
             onRotate={() => setRotation((r) => r + 90)}
             onClose={() => onOpenChange(false)}
           />
 
           {/* Zoom percentage */}
           <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-            {Math.round(scale * 100)}%
+            {scaleDisplay}%
           </div>
 
           {/* OCR loading indicator */}

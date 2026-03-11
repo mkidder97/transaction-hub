@@ -24,6 +24,7 @@ import { Receipt, FileText, Paperclip, Loader2, CheckCircle2 } from "lucide-reac
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
+import { TransactionDetailPanel } from "@/components/employee/TransactionDetailPanel";
 
 interface Period { id: string; name: string; is_current: boolean }
 

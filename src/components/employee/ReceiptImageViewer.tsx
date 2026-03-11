@@ -66,7 +66,9 @@ const ReceiptImageViewer = ({
   onAmountSelect,
 }: Props) => {
   const [rotation, setRotation] = useState(0);
-  const [scale, setScale] = useState(1);
+  const scaleRef = useRef(1);
+  const [scaleDisplay, setScaleDisplay] = useState(100);
+  const rafRef = useRef(0);
 
   // OCR state
   const [words, setWords] = useState<WordBox[]>([]);

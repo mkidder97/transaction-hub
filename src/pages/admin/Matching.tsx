@@ -401,20 +401,28 @@ const Matching = () => {
     const amount = receipt ? (receipt.amount_confirmed ?? receipt.amount_extracted) : null;
     const tolerance = 0.5;
 
-    setSearchModal({ type: "transaction", sourceId: receiptId });
-    setSearchResults([]);
     setSearchVendor(vendor);
     setSearchAmountMin(amount != null ? String(Math.max(0, amount - tolerance)) : "");
     setSearchAmountMax(amount != null ? String(amount + tolerance) : "");
+    setSearchResults([]);
+    setSearchModal({ type: "transaction", sourceId: receiptId });
   };
 
   const openSearchReceipt = (txId: string) => {
-    setSearchModal({ type: "receipt", sourceId: txId });
-    setSearchResults([]);
     setSearchVendor("");
     setSearchAmountMin("");
     setSearchAmountMax("");
+    setSearchResults([]);
+    setSearchModal({ type: "receipt", sourceId: txId });
   };
+
+  // Auto-run search when modal opens with pre-filled data
+  useEffect(() => {
+    if (searchModal && (searchVendor || searchAmountMin || searchAmountMax)) {
+      runSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchModal]);
 
   const runSearch = async () => {
     if (!searchModal || !periodId) return;

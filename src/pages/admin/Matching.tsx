@@ -236,6 +236,17 @@ const Matching = () => {
   }, []);
 
   /* ── Fetch tab data ─────────────────────────────────────────── */
+  const fetchAll = useCallback(async (pid: string) => {
+    setAllLoading(true);
+    const { data } = await supabase
+      .from("receipts")
+      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)")
+      .eq("statement_period_id", pid)
+      .order("created_at", { ascending: false });
+    setAllReceipts((data as unknown as ReceiptRow[]) ?? []);
+    setAllLoading(false);
+  }, []);
+
   const fetchReview = useCallback(async (pid: string) => {
     setReviewLoading(true);
     const { data } = await supabase

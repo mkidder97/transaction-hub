@@ -2,7 +2,6 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { X, ZoomIn, ZoomOut, RotateCw, Loader2, Type, DollarSign, Check } from "lucide-react";
-import { TransformWrapper, TransformComponent, useControls } from "react-zoom-pan-pinch";
 import Tesseract from "tesseract.js";
 
 /* ────────────────────────────── types ────────────────────────────── */
@@ -24,34 +23,8 @@ interface Props {
 type SelectionMode = "vendor" | "amount" | null;
 
 const AMOUNT_RE = /^\$?[\d,]+\.\d{2}$/;
-
-/* ────────────────────── zoom toolbar (inside wrapper) ────────────── */
-
-const ZoomToolbar = ({
-  onRotate,
-  onClose,
-}: {
-  onRotate: () => void;
-  onClose: () => void;
-}) => {
-  const { zoomIn, zoomOut } = useControls();
-  return (
-    <div className="absolute top-3 right-3 z-50 flex gap-1.5">
-      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => zoomIn()}>
-        <ZoomIn className="h-4 w-4" />
-      </Button>
-      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => zoomOut()}>
-        <ZoomOut className="h-4 w-4" />
-      </Button>
-      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={onRotate}>
-        <RotateCw className="h-4 w-4" />
-      </Button>
-      <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={onClose}>
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-  );
-};
+const MIN_SCALE = 0.5;
+const MAX_SCALE = 5;
 
 /* ────────────────────── main component ───────────────────────────── */
 
@@ -65,18 +38,25 @@ const ReceiptImageViewer = ({
 }: Props) => {
   const [rotation, setRotation] = useState(0);
 
-  const handleRotate = useCallback(() => setRotation((r) => r + 90), []);
-  const handleClose = useCallback(() => onOpenChange(false), [onOpenChange]);
+  // Zoom/pan via refs + CSS transform (no React state to avoid re-render loops)
+  const scaleRef = useRef(1);
+  const posRef = useRef({ x: 0, y: 0 });
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Pan gesture tracking
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const posAtPanStart = useRef({ x: 0, y: 0 });
 
   // OCR state
   const [words, setWords] = useState<WordBox[]>([]);
   const [ocrLoading, setOcrLoading] = useState(false);
 
-  // Image dimensions
-  const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
-  const [displaySize, setDisplaySize] = useState({ w: 0, h: 0 });
+  // Image dimensions (tracked via refs to avoid re-render loops)
+  const naturalSizeRef = useRef({ w: 0, h: 0 });
+  const displaySizeRef = useRef({ w: 0, h: 0 });
+  const [overlayReady, setOverlayReady] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
-  const observerRef = useRef<ResizeObserver | null>(null);
 
   // Selection state
   const [mode, setMode] = useState<SelectionMode>(null);
@@ -87,17 +67,28 @@ const ReceiptImageViewer = ({
   const pointerDownTime = useRef(0);
   const pointerDownPos = useRef({ x: 0, y: 0 });
 
+  /* ── Apply transform to DOM directly ────────────────────────────── */
+  const applyTransform = useCallback(() => {
+    if (!contentRef.current) return;
+    const s = scaleRef.current;
+    const { x, y } = posRef.current;
+    contentRef.current.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+  }, []);
+
   /* ── Reset on open ──────────────────────────────────────────────── */
   useEffect(() => {
     if (open) {
       setRotation(0);
+      scaleRef.current = 1;
+      posRef.current = { x: 0, y: 0 };
       setWords([]);
       setOcrLoading(false);
       setMode(null);
       setVendorWordIndices(new Set());
       setAmountWordIndex(null);
-      setNaturalSize({ w: 0, h: 0 });
-      setDisplaySize({ w: 0, h: 0 });
+      naturalSizeRef.current = { w: 0, h: 0 };
+      displaySizeRef.current = { w: 0, h: 0 };
+      setOverlayReady(false);
     }
   }, [open]);
 
@@ -115,11 +106,10 @@ const ReceiptImageViewer = ({
 
         if (cancelled) return;
 
-        // tesseract.js exposes words at runtime; cast to bypass strict types
         const rawWords: any[] = (result.data as any).words ?? [];
         const wordBoxes: WordBox[] = rawWords
-          .filter((w) => w.text?.trim().length > 0)
-          .map((w) => ({
+          .filter((w: any) => w.text?.trim().length > 0)
+          .map((w: any) => ({
             text: w.text.trim(),
             bbox: w.bbox,
           }));
@@ -136,37 +126,58 @@ const ReceiptImageViewer = ({
     return () => { cancelled = true; };
   }, [open, src]);
 
-  /* ── Track displayed image size via ResizeObserver ───────────────── */
-  const attachObserver = useCallback((el: HTMLImageElement | null) => {
-    // Clean up previous
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-      observerRef.current = null;
-    }
-
-    if (!el) return;
-    imgRef.current = el;
-
-    const update = () => {
-      setDisplaySize({ w: el.offsetWidth, h: el.offsetHeight });
-    };
-
-    observerRef.current = new ResizeObserver(update);
-    observerRef.current.observe(el);
-    update();
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (observerRef.current) observerRef.current.disconnect();
-    };
-  }, []);
-
+  /* ── Image load ─────────────────────────────────────────────────── */
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
-    setNaturalSize({ w: img.naturalWidth, h: img.naturalHeight });
-    setDisplaySize({ w: img.offsetWidth, h: img.offsetHeight });
+    naturalSizeRef.current = { w: img.naturalWidth, h: img.naturalHeight };
+    displaySizeRef.current = { w: img.offsetWidth, h: img.offsetHeight };
+    imgRef.current = img;
+    setOverlayReady(true);
   }, []);
+
+  /* ── Zoom via wheel ─────────────────────────────────────────────── */
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    scaleRef.current = Math.min(MAX_SCALE, Math.max(MIN_SCALE, scaleRef.current * delta));
+    applyTransform();
+  }, [applyTransform]);
+
+  /* ── Pan via pointer ────────────────────────────────────────────── */
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    // Only pan with primary button and when not in selection mode or on the background
+    if (e.button !== 0) return;
+    isPanning.current = true;
+    panStart.current = { x: e.clientX, y: e.clientY };
+    posAtPanStart.current = { ...posRef.current };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanning.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    posRef.current = {
+      x: posAtPanStart.current.x + dx,
+      y: posAtPanStart.current.y + dy,
+    };
+    applyTransform();
+  }, [applyTransform]);
+
+  const handlePointerUp = useCallback(() => {
+    isPanning.current = false;
+  }, []);
+
+  /* ── Zoom buttons ───────────────────────────────────────────────── */
+  const zoomIn = useCallback(() => {
+    scaleRef.current = Math.min(MAX_SCALE, scaleRef.current * 1.3);
+    applyTransform();
+  }, [applyTransform]);
+
+  const zoomOut = useCallback(() => {
+    scaleRef.current = Math.max(MIN_SCALE, scaleRef.current / 1.3);
+    applyTransform();
+  }, [applyTransform]);
 
   /* ── Tap detection on word boxes ─────────────────────────────────── */
   const handleWordPointerDown = useCallback((e: React.PointerEvent) => {
@@ -180,7 +191,6 @@ const ReceiptImageViewer = ({
       const dx = Math.abs(e.clientX - pointerDownPos.current.x);
       const dy = Math.abs(e.clientY - pointerDownPos.current.y);
 
-      // Only treat as tap if < 200ms and < 5px movement
       if (elapsed > 200 || dx > 5 || dy > 5) return;
       if (!mode) return;
 
@@ -195,7 +205,6 @@ const ReceiptImageViewer = ({
           if (next.has(index)) next.delete(index);
           else next.add(index);
 
-          // Build vendor string from selected words in order
           const selectedText = Array.from(next)
             .sort((a, b) => a - b)
             .map((i) => words[i].text)
@@ -217,51 +226,68 @@ const ReceiptImageViewer = ({
 
   /* ── Render ─────────────────────────────────────────────────────── */
   const hasSelection = onVendorSelect || onAmountSelect;
-  const canOverlay = naturalSize.w > 0 && displaySize.w > 0 && words.length > 0;
+  const ns = naturalSizeRef.current;
+  const ds = displaySizeRef.current;
+  const canOverlay = overlayReady && ns.w > 0 && ds.w > 0 && words.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 bg-background/95 backdrop-blur-sm border-none [&>button]:hidden">
-        <TransformWrapper
-          initialScale={1}
-          minScale={0.5}
-          maxScale={5}
-          panning={{ disabled: false }}
-          doubleClick={{ disabled: true }}
+      <DialogContent className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 bg-background/95 backdrop-blur-sm border-none [&>button]:hidden overflow-hidden">
+        {/* Top toolbar */}
+        <div className="absolute top-3 right-3 z-50 flex gap-1.5">
+          <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={zoomIn}>
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={zoomOut}>
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => setRotation((r) => r + 90)}>
+            <RotateCw className="h-4 w-4" />
+          </Button>
+          <Button size="icon" variant="secondary" className="h-8 w-8 rounded-full" onClick={() => onOpenChange(false)}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* OCR loading indicator */}
+        {ocrLoading && (
+          <div className="absolute top-3 left-3 z-50 flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning text…
+          </div>
+        )}
+
+        {/* Pannable / zoomable area */}
+        <div
+          className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+          onWheel={handleWheel}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
         >
-          {/* Top toolbar */}
-          <ZoomToolbar
-            onRotate={handleRotate}
-            onClose={handleClose}
-          />
-
-          {/* OCR loading indicator */}
-          {ocrLoading && (
-            <div className="absolute top-3 left-3 z-50 flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning text…
-            </div>
-          )}
-
-          {/* Image area */}
-          <TransformComponent
-            wrapperStyle={{ width: "100%", height: "100%" }}
-            contentStyle={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}
+          <div
+            ref={contentRef}
+            className="will-change-transform"
+            style={{ transformOrigin: "center center" }}
           >
-            <div className="relative inline-block" style={{ transform: `rotate(${rotation}deg)`, transition: "transform 0.2s ease-out" }}>
+            <div
+              className="relative inline-block"
+              style={{ transform: `rotate(${rotation}deg)`, transition: "transform 0.2s ease-out" }}
+            >
               <img
-                ref={attachObserver}
+                ref={imgRef}
                 src={src}
                 alt={alt}
                 draggable={false}
                 onLoad={handleImageLoad}
-                className="max-w-full max-h-[80vh] select-none"
+                className="max-w-full max-h-[80vh] select-none pointer-events-none"
               />
 
               {/* Word overlay boxes */}
               {canOverlay &&
                 words.map((word, idx) => {
-                  const scaleX = displaySize.w / naturalSize.w;
-                  const scaleY = displaySize.h / naturalSize.h;
+                  const scaleX = ds.w / ns.w;
+                  const scaleY = ds.h / ns.h;
 
                   const left = word.bbox.x0 * scaleX;
                   const top = word.bbox.y0 * scaleY;
@@ -301,38 +327,38 @@ const ReceiptImageViewer = ({
                   );
                 })}
             </div>
-          </TransformComponent>
+          </div>
+        </div>
 
-          {/* Bottom toolbar */}
-          {hasSelection && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-border">
-              <Button
-                size="sm"
-                variant={mode === "vendor" ? "default" : "outline"}
-                className={`gap-1.5 h-8 text-xs ${mode === "vendor" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
-                onClick={() => setMode(mode === "vendor" ? null : "vendor")}
-              >
-                <Type className="h-3.5 w-3.5" /> Set Vendor
-              </Button>
-              <Button
-                size="sm"
-                variant={mode === "amount" ? "default" : "outline"}
-                className={`gap-1.5 h-8 text-xs ${mode === "amount" ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
-                onClick={() => setMode(mode === "amount" ? null : "amount")}
-              >
-                <DollarSign className="h-3.5 w-3.5" /> Set Amount
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="gap-1.5 h-8 text-xs"
-                onClick={() => onOpenChange(false)}
-              >
-                <Check className="h-3.5 w-3.5" /> Done
-              </Button>
-            </div>
-          )}
-        </TransformWrapper>
+        {/* Bottom toolbar */}
+        {hasSelection && (
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-background/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-lg border border-border">
+            <Button
+              size="sm"
+              variant={mode === "vendor" ? "default" : "outline"}
+              className={`gap-1.5 h-8 text-xs ${mode === "vendor" ? "bg-blue-600 hover:bg-blue-700 text-white" : ""}`}
+              onClick={() => setMode(mode === "vendor" ? null : "vendor")}
+            >
+              <Type className="h-3.5 w-3.5" /> Set Vendor
+            </Button>
+            <Button
+              size="sm"
+              variant={mode === "amount" ? "default" : "outline"}
+              className={`gap-1.5 h-8 text-xs ${mode === "amount" ? "bg-green-600 hover:bg-green-700 text-white" : ""}`}
+              onClick={() => setMode(mode === "amount" ? null : "amount")}
+            >
+              <DollarSign className="h-3.5 w-3.5" /> Set Amount
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="gap-1.5 h-8 text-xs"
+              onClick={() => onOpenChange(false)}
+            >
+              <Check className="h-3.5 w-3.5" /> Done
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

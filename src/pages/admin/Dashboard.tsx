@@ -141,7 +141,7 @@ const AdminDashboard = () => {
     { label: "Total Receipts", value: stats.total, icon: <Receipt className="h-5 w-5" />, color: "text-foreground" },
     { label: "Approved", value: stats.approved, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent" },
     { label: "Flagged", value: stats.flagged, icon: <Flag className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning" },
+    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=needs-review" },
   ];
 
   if (loading) {

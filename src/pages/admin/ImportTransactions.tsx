@@ -54,9 +54,11 @@ const ImportTransactions = () => {
   const { user } = useAuth();
 
   // Screenshot tab state
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrTotal, setOcrTotal] = useState(0);
+  const [ocrCurrent, setOcrCurrent] = useState(0);
   const [rows, setRows] = useState<ParsedTransactionRow[]>([]);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -93,46 +95,63 @@ const ImportTransactions = () => {
   useEffect(() => { fetchBatches(); }, [fetchBatches]);
 
   const handleScreenshot = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    const localUrl = URL.createObjectURL(file);
-    setPreview(localUrl);
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) return;
+
+    const fileList = Array.from(files);
+    const localUrls = fileList.map((f) => URL.createObjectURL(f));
+    setPreviews(localUrls);
     setRows([]);
     setOcrRunning(true);
     setOcrProgress(0);
-    try {
-      // Upload screenshot to storage for AI processing
-      const storagePath = `screenshots/${uuidv4()}.jpg`;
-      const { error: uploadErr } = await supabase.storage
-        .from("transaction-screenshots")
-        .upload(storagePath, file, { contentType: file.type, upsert: false });
-      if (uploadErr) throw uploadErr;
+    setOcrTotal(fileList.length);
+    setOcrCurrent(0);
 
-      const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
-      setOcrProgress(0.3);
+    const allRows: ParsedTransactionRow[] = [];
+    let failCount = 0;
 
-      // Call AI extraction edge function
-      const { data: extractData, error: extractErr } = await supabase.functions.invoke(
-        "extract-transactions",
-        { body: { imageUrl: urlData.publicUrl } },
-      );
-      setOcrProgress(1);
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setOcrCurrent(i + 1);
+      setOcrProgress((i) / fileList.length);
 
-      if (extractErr) throw new Error(extractErr.message || "AI extraction failed");
+      try {
+        const storagePath = `screenshots/${uuidv4()}.jpg`;
+        const { error: uploadErr } = await supabase.storage
+          .from("transaction-screenshots")
+          .upload(storagePath, file, { contentType: file.type, upsert: false });
+        if (uploadErr) throw uploadErr;
 
-      const txRows: ParsedTransactionRow[] = (extractData?.transactions || []).map((t: any) => ({
-        date: t.date || "",
-        vendor: t.vendor || "Unknown",
-        amount: t.amount || "0",
-        card_last_four: t.card_last_four || "",
-      }));
-      setRows(txRows);
-      if (txRows.length === 0) toast.error("No transactions detected — try a clearer screenshot.");
-    } catch (err: any) {
-      toast.error(err.message || "Extraction failed");
-    } finally {
-      setOcrRunning(false);
+        const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
+
+        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+          "extract-transactions",
+          { body: { imageUrl: urlData.publicUrl } },
+        );
+
+        if (extractErr) throw new Error(extractErr.message || "AI extraction failed");
+
+        const txRows: ParsedTransactionRow[] = (extractData?.transactions || []).map((t: any) => ({
+          date: t.date || "",
+          vendor: t.vendor || "Unknown",
+          amount: t.amount || "0",
+          card_last_four: t.card_last_four || "",
+        }));
+        allRows.push(...txRows);
+      } catch (err: any) {
+        failCount++;
+        toast.error(`Screenshot ${i + 1} failed: ${err.message || "Extraction error"}`);
+      }
     }
+
+    setOcrProgress(1);
+    setRows(allRows);
+    if (allRows.length === 0 && failCount === 0) {
+      toast.error("No transactions detected — try clearer screenshots.");
+    } else if (allRows.length > 0) {
+      toast.success(`Extracted ${allRows.length} transaction(s) from ${fileList.length - failCount} screenshot(s).`);
+    }
+    setOcrRunning(false);
   }, [user]);
 
   const updateRow = (idx: number, field: keyof ParsedTransactionRow, value: string) => {
@@ -200,7 +219,7 @@ const ImportTransactions = () => {
 
       if (source === "screenshot") {
         setRows([]);
-        setPreview(null);
+        setPreviews([]);
         if (fileRef.current) fileRef.current.value = "";
       } else {
         setCsvRawRows([]);
@@ -335,25 +354,33 @@ const ImportTransactions = () => {
         {/* Screenshot Tab */}
         <TabsContent value="screenshot" className="space-y-4 mt-4">
           <div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleScreenshot} />
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleScreenshot} />
             <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={ocrRunning || importing}>
-              <Upload className="h-4 w-4" /> Upload Screenshot
+              <Upload className="h-4 w-4" /> Upload Screenshots
             </Button>
           </div>
 
-          {preview && (
-            <Card className="overflow-hidden">
-              <CardContent className="p-0 relative">
-                <img src={preview} alt="Statement screenshot" className="w-full max-h-[300px] object-contain bg-muted" />
-                {ocrRunning && (
-                  <div className="absolute inset-0 bg-background/70 flex flex-col items-center justify-center gap-2">
-                    <ScanSearch className="h-8 w-8 animate-pulse text-primary" />
-                    <span className="text-sm font-medium">Extracting transactions…</span>
-                    <Progress value={Math.round(ocrProgress * 100)} className="h-2 w-48" />
+          {previews.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {previews.map((src, i) => (
+                  <Card key={i} className="overflow-hidden shrink-0 w-48">
+                    <CardContent className="p-0">
+                      <img src={src} alt={`Screenshot ${i + 1}`} className="w-full h-28 object-cover bg-muted" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              {ocrRunning && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                  <ScanSearch className="h-5 w-5 animate-pulse text-primary shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <span className="text-sm font-medium">Extracting… ({ocrCurrent} of {ocrTotal})</span>
+                    <Progress value={Math.round(ocrProgress * 100)} className="h-2" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </div>
           )}
 
           {rows.length > 0 && !ocrRunning && (

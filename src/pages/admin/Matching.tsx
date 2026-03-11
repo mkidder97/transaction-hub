@@ -583,7 +583,10 @@ const Matching = () => {
           setSearchParams({ tab: v });
         }}
       >
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="all">
+            All{stats.total > 0 && ` (${stats.total})`}
+          </TabsTrigger>
           <TabsTrigger value="needs-review">
             Needs Review{stats.needsReview > 0 && ` (${stats.needsReview})`}
           </TabsTrigger>
@@ -593,8 +596,72 @@ const Matching = () => {
           <TabsTrigger value="no-receipt">
             No Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
           </TabsTrigger>
-          <TabsTrigger value="matched">Matched</TabsTrigger>
+          <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
         </TabsList>
+
+        {/* ── Tab: All Receipts ────────────────────────────────── */}
+        <TabsContent value="all">
+          {allLoading ? (
+            <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+          ) : allReceipts.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
+                <Files className="h-10 w-10" />
+                <p className="text-sm">No receipts in this period.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Match</TableHead>
+                    <TableHead>Matched Tx</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allReceipts.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
+                      <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] px-1.5 py-0 ${
+                            r.match_status === "matched" || r.match_status === "auto_matched" || r.match_status === "manual_match"
+                              ? "bg-accent/15 text-accent"
+                              : r.match_status === "needs_review"
+                              ? "bg-warning/15 text-warning"
+                              : "bg-destructive/15 text-destructive"
+                          }`}
+                        >
+                          {r.match_status === "auto_matched" ? "Auto" : r.match_status === "manual_match" ? "Manual" : r.match_status === "matched" ? "Matched" : r.match_status === "needs_review" ? "Review" : "Unmatched"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.transaction ? (
+                          <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
+                        ) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
 
         {/* ── Tab 1: Needs Review ──────────────────────────────── */}
         <TabsContent value="needs-review">

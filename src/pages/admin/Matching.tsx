@@ -297,11 +297,12 @@ const Matching = () => {
 
   const refreshAll = useCallback((pid: string) => {
     fetchStats(pid);
+    fetchAll(pid);
     fetchReview(pid);
     fetchUnmatched(pid);
     fetchOrphans(pid);
     fetchMatched(pid);
-  }, [fetchStats, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched]);
+  }, [fetchStats, fetchAll, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched]);
 
   useEffect(() => {
     if (periodId) refreshAll(periodId);

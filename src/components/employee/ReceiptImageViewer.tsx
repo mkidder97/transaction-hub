@@ -229,7 +229,6 @@ const ReceiptImageViewer = ({
     if (!img) return;
     const ro = new ResizeObserver(() => {
       displaySizeRef.current = { w: img.offsetWidth, h: img.offsetHeight };
-      if (img.offsetWidth > 0) setOverlayReady(true);
     });
     ro.observe(img);
     return () => ro.disconnect();
@@ -264,6 +263,20 @@ const ReceiptImageViewer = ({
         {ocrLoading && (
           <div className="absolute top-3 left-3 z-50 flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Scanning text…
+          </div>
+        )}
+
+        {/* No text detected message */}
+        {!ocrLoading && overlayReady && words.length === 0 && (
+          <div className="absolute top-3 left-3 z-50 flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded text-xs text-muted-foreground">
+            No text detected — try a clearer photo
+          </div>
+        )}
+
+        {/* Word count indicator in selection mode */}
+        {!ocrLoading && mode && words.length > 0 && (
+          <div className="absolute top-3 left-3 z-50 flex items-center gap-2 bg-background/80 px-3 py-1.5 rounded text-xs text-muted-foreground">
+            {words.length} words detected
           </div>
         )}
 

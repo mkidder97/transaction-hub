@@ -24,6 +24,7 @@ import { Receipt, FileText, Paperclip, Loader2, CheckCircle2 } from "lucide-reac
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
+import { TransactionDetailPanel } from "@/components/employee/TransactionDetailPanel";
 
 interface Period { id: string; name: string; is_current: boolean }
 
@@ -80,6 +81,7 @@ const EmployeeTransactions = () => {
   const [attachingTxId, setAttachingTxId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingTxRef = useRef<TransactionRow | null>(null);
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -267,7 +269,7 @@ const EmployeeTransactions = () => {
             </TableHeader>
             <TableBody>
               {transactions.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedTxId(t.id)}>
                   <TableCell className="text-sm">{t.transaction_date ?? "—"}</TableCell>
                   <TableCell className="text-sm font-medium truncate max-w-[200px]">
                     {t.vendor_normalized ?? t.vendor_raw ?? "—"}
@@ -295,7 +297,7 @@ const EmployeeTransactions = () => {
                         variant="outline"
                         className="h-7 gap-1 text-xs"
                         disabled={attachingTxId === t.id}
-                        onClick={() => handleAttachReceipt(t)}
+                        onClick={(e) => { e.stopPropagation(); handleAttachReceipt(t); }}
                       >
                         {attachingTxId === t.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -312,6 +314,12 @@ const EmployeeTransactions = () => {
           </Table>
         </div>
       )}
+
+      <TransactionDetailPanel
+        transactionId={selectedTxId}
+        open={!!selectedTxId}
+        onOpenChange={(open) => { if (!open) setSelectedTxId(null); }}
+      />
     </div>
   );
 };

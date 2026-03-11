@@ -395,11 +395,17 @@ const Matching = () => {
 
   /* ── Search modal helpers ───────────────────────────────────── */
   const openSearchTx = (receiptId: string) => {
+    // Find the receipt to auto-fill search fields
+    const receipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(r => r.id === receiptId);
+    const vendor = receipt ? (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "") : "";
+    const amount = receipt ? (receipt.amount_confirmed ?? receipt.amount_extracted) : null;
+    const tolerance = 0.5;
+
     setSearchModal({ type: "transaction", sourceId: receiptId });
     setSearchResults([]);
-    setSearchVendor("");
-    setSearchAmountMin("");
-    setSearchAmountMax("");
+    setSearchVendor(vendor);
+    setSearchAmountMin(amount != null ? String(Math.max(0, amount - tolerance)) : "");
+    setSearchAmountMax(amount != null ? String(amount + tolerance) : "");
   };
 
   const openSearchReceipt = (txId: string) => {

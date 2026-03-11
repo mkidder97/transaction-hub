@@ -230,7 +230,13 @@ const ReceiptImageViewer = ({
           initialScale={1}
           minScale={0.5}
           maxScale={5}
-          onTransformed={(_, state) => setScale(state.scale)}
+          onTransformed={(_, state) => {
+            scaleRef.current = state.scale;
+            cancelAnimationFrame(rafRef.current);
+            rafRef.current = requestAnimationFrame(() => {
+              setScaleDisplay(Math.round(state.scale * 100));
+            });
+          }}
           panning={{ disabled: false }}
           doubleClick={{ disabled: true }}
         >

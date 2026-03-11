@@ -220,7 +220,7 @@ const ReceiptImageViewer = ({
         onAmountSelect?.(val);
       }
     },
-    [mode, words, onVendorSelect, onAmountSelect],
+    [mode, words, vendorWordIndices, onVendorSelect, onAmountSelect],
   );
 
   /* ── Render ─────────────────────────────────────────────────────── */

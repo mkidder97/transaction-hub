@@ -181,6 +181,7 @@ const ReceiptImageViewer = ({
 
   /* ── Tap detection on word boxes ─────────────────────────────────── */
   const handleWordPointerDown = useCallback((e: React.PointerEvent) => {
+    e.stopPropagation();
     pointerDownTime.current = Date.now();
     pointerDownPos.current = { x: e.clientX, y: e.clientY };
   }, []);

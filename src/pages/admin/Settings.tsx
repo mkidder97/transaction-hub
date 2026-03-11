@@ -369,8 +369,13 @@ const AdminSettings = () => {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="vendors">
+          <VendorManagement />
+        </TabsContent>
+      </Tabs>
     </div>
-  );
 };
 
 export default AdminSettings;

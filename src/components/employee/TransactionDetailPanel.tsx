@@ -6,7 +6,6 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ExternalLink, Receipt, Calendar, Store, CreditCard, DollarSign, FileText } from "lucide-react";
-import { ExternalLink, Receipt, Calendar, Store, CreditCard, DollarSign, FileText } from "lucide-react";
 
 interface TransactionDetailPanelProps {
   transactionId: string | null;

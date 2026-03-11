@@ -471,9 +471,11 @@ const SubmitReceipt = () => {
 
       {/* Image lightbox */}
       <ReceiptImageViewer
-        src={lightboxSrc ?? ""}
-        open={!!lightboxSrc}
-        onOpenChange={(open) => { if (!open) setLightboxSrc(null); }}
+        src={lightboxItem?.src ?? ""}
+        open={!!lightboxItem}
+        onOpenChange={(open) => { if (!open) setLightboxItem(null); }}
+        onVendorSelect={(v) => { if (lightboxItem) updateItem(lightboxItem.id, { vendor: v }); }}
+        onAmountSelect={(a) => { if (lightboxItem) updateItem(lightboxItem.id, { amount: a }); }}
       />
     </div>
   );

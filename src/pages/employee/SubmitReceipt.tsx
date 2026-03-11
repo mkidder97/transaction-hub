@@ -468,6 +468,13 @@ const SubmitReceipt = () => {
           Submit {readyCount} Receipt{readyCount !== 1 ? "s" : ""}
         </Button>
       )}
+
+      {/* Image lightbox */}
+      <ReceiptImageViewer
+        src={lightboxSrc ?? ""}
+        open={!!lightboxSrc}
+        onOpenChange={(open) => { if (!open) setLightboxSrc(null); }}
+      />
     </div>
   );
 };

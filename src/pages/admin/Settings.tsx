@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -15,8 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2 } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen } from "lucide-react";
 import { toast } from "sonner";
+import VendorManagement from "@/components/admin/VendorManagement";
 
 // ---------- Types ----------
 

@@ -249,7 +249,7 @@ const ReceiptImageViewer = ({
 
           {/* Zoom percentage */}
           <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-            {Math.round(scale * 100)}%
+            {scaleDisplay}%
           </div>
 
           {/* OCR loading indicator */}

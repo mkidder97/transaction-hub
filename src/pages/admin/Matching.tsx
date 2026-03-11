@@ -496,9 +496,20 @@ const Matching = () => {
           </SelectContent>
         </Select>
 
-        <Button className="gap-2" onClick={handleRunMatch} disabled={running || !periodId}>
-          {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-          {running ? "Running…" : "Run Auto-Match"}
+        {isClosed ? (
+          <Badge variant="secondary" className="gap-1 py-1.5 px-3">
+            <Lock className="h-3.5 w-3.5" /> Period Closed
+          </Badge>
+        ) : (
+          <Button className="gap-2" onClick={handleRunMatch} disabled={running || !periodId}>
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            {running ? "Running…" : "Run Auto-Match"}
+          </Button>
+        )}
+
+        <Button variant="outline" className="gap-2" onClick={handleDownloadReport} disabled={pdfGenerating || !periodId}>
+          {pdfGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Download Report
         </Button>
       </div>
 

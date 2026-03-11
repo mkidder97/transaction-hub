@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -29,7 +28,6 @@ import {
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
-import { runOcr, type OcrResult } from "@/lib/ocr";
 import { lookupVendor, submitVendorCandidate } from "@/lib/vendorLookup";
 import ReceiptImageViewer from "@/components/employee/ReceiptImageViewer";
 
@@ -38,7 +36,7 @@ interface Category {
   name: string;
 }
 
-type ItemStatus = "uploading" | "ocr" | "ready" | "error" | "submitting" | "done";
+type ItemStatus = "uploading" | "extracting" | "ready" | "error" | "submitting" | "done";
 
 interface ReceiptItem {
   id: string;
@@ -49,13 +47,15 @@ interface ReceiptItem {
   errorMessage?: string;
   storagePath?: string;
   publicUrl?: string;
-  ocrResult?: OcrResult;
-  ocrProgress: number;
   vendor: string;
   amount: string;
   date: string;
   categoryId: string;
   notes: string;
+  aiConfidence?: number;
+  vendorExtracted?: string;
+  amountExtracted?: number | null;
+  dateExtracted?: string | null;
 }
 
 async function compressImage(file: File, maxDim = 1200): Promise<Blob> {
@@ -133,7 +133,6 @@ const SubmitReceipt = () => {
       try {
         // Compress
         const compressed = await compressImage(item.file);
-        const compressedUrl = URL.createObjectURL(compressed);
         updateItem(item.id, { compressedSize: compressed.size });
 
         // Upload with retry
@@ -143,16 +142,24 @@ const SubmitReceipt = () => {
         await uploadWithRetry(storagePath, compressed, "image/jpeg");
 
         const { data: urlData } = supabase.storage.from("receipts").getPublicUrl(storagePath);
-        updateItem(item.id, { storagePath, publicUrl: urlData.publicUrl, status: "ocr" });
+        const publicUrl = urlData.publicUrl;
+        updateItem(item.id, { storagePath, publicUrl, status: "extracting" });
 
-        // OCR on compressed image
-        const result = await runOcr(compressedUrl, (p) => {
-          updateItem(item.id, { ocrProgress: p });
-        });
-        URL.revokeObjectURL(compressedUrl);
+        // AI Vision extraction via edge function
+        const { data: extractData, error: extractError } = await supabase.functions.invoke(
+          "extract-receipt",
+          { body: { imageUrl: publicUrl } },
+        );
+
+        if (extractError) throw new Error(extractError.message || "AI extraction failed");
+
+        const vendorRaw = extractData?.vendor_extracted ?? "";
+        const amountRaw = extractData?.amount_extracted ?? null;
+        const dateRaw = extractData?.date_extracted ?? null;
+        const confidence = extractData?.ai_confidence ?? 0;
 
         // Vendor dictionary lookup
-        let vendorName = result.vendor_extracted ?? "";
+        let vendorName = vendorRaw;
         let autoCategoryId = "";
         if (vendorName) {
           const match = await lookupVendor(vendorName);
@@ -164,12 +171,14 @@ const SubmitReceipt = () => {
 
         updateItem(item.id, {
           status: "ready",
-          ocrResult: result,
           vendor: vendorName,
-          amount: result.amount_extracted != null ? String(result.amount_extracted) : "",
-          date: result.date_extracted ?? "",
+          vendorExtracted: vendorRaw,
+          amount: amountRaw != null ? String(amountRaw) : "",
+          amountExtracted: amountRaw,
+          date: dateRaw ?? "",
+          dateExtracted: dateRaw,
           categoryId: autoCategoryId,
-          ocrProgress: 1,
+          aiConfidence: confidence,
         });
       } catch (err: any) {
         updateItem(item.id, { status: "error", errorMessage: err.message ?? "Processing failed" });
@@ -193,7 +202,6 @@ const SubmitReceipt = () => {
         file,
         previewUrl: URL.createObjectURL(file),
         status: "uploading" as ItemStatus,
-        ocrProgress: 0,
         vendor: "",
         amount: "",
         date: "",
@@ -203,7 +211,6 @@ const SubmitReceipt = () => {
 
       setItems((prev) => [...prev, ...newItems]);
 
-      // Process sequentially to avoid saturating mobile connections
       const queue = [...newItems];
       const workers = Array.from({ length: 1 }, async () => {
         while (queue.length > 0) {
@@ -213,7 +220,6 @@ const SubmitReceipt = () => {
       });
       await Promise.all(workers);
 
-      // Reset input so the same files can be selected again
       e.target.value = "";
     },
     [user, processFile],
@@ -241,11 +247,11 @@ const SubmitReceipt = () => {
       user_id: user.id,
       photo_url: item.publicUrl!,
       storage_path: item.storagePath!,
-      vendor_extracted: item.ocrResult?.vendor_extracted ?? null,
-      amount_extracted: item.ocrResult?.amount_extracted ?? null,
-      date_extracted: item.ocrResult?.date_extracted ?? null,
-      ai_raw_text: item.ocrResult?.ai_raw_text ?? null,
-      ai_confidence: item.ocrResult?.ai_confidence ?? null,
+      vendor_extracted: item.vendorExtracted ?? null,
+      amount_extracted: item.amountExtracted ?? null,
+      date_extracted: item.dateExtracted ?? null,
+      ai_raw_text: null,
+      ai_confidence: item.aiConfidence ?? null,
       vendor_confirmed: item.vendor || null,
       amount_confirmed: item.amount ? parseFloat(item.amount) : null,
       date_confirmed: item.date || null,
@@ -259,17 +265,14 @@ const SubmitReceipt = () => {
       if (error) throw error;
 
       // Submit vendor candidates for admin review
-      if (user) {
-        for (const item of readyItems) {
-          const ocrVendor = item.ocrResult?.vendor_extracted;
-          const confirmedVendor = item.vendor;
-          if (ocrVendor && confirmedVendor && ocrVendor !== confirmedVendor) {
-            await submitVendorCandidate(ocrVendor, confirmedVendor, item.categoryId || null, user.id);
-          }
+      for (const item of readyItems) {
+        const ocrVendor = item.vendorExtracted;
+        const confirmedVendor = item.vendor;
+        if (ocrVendor && confirmedVendor && ocrVendor !== confirmedVendor) {
+          await submitVendorCandidate(ocrVendor, confirmedVendor, item.categoryId || null, user.id);
         }
       }
 
-      // Mark all as done
       setItems((prev) =>
         prev.map((i) => (readyItems.some((r) => r.id === i.id) ? { ...i, status: "done" as ItemStatus } : i)),
       );
@@ -283,7 +286,7 @@ const SubmitReceipt = () => {
   };
 
   const readyCount = items.filter((i) => i.status === "ready").length;
-  const processingCount = items.filter((i) => i.status === "uploading" || i.status === "ocr").length;
+  const processingCount = items.filter((i) => i.status === "uploading" || i.status === "extracting").length;
   const doneCount = items.filter((i) => i.status === "done").length;
 
   const confidenceColor = (score: number) => {
@@ -297,7 +300,7 @@ const SubmitReceipt = () => {
       <div>
         <h1 className="text-2xl font-bold">Submit Receipts</h1>
         <p className="text-muted-foreground text-sm">
-          Select up to {MAX_FILES} photos at once. Review extracted data, then submit all.
+          Select up to {MAX_FILES} photos at once. AI extracts data automatically.
         </p>
       </div>
 
@@ -340,7 +343,6 @@ const SubmitReceipt = () => {
         {items.map((item) => (
           <Card key={item.id} className="overflow-hidden">
             <CardContent className="p-3 space-y-3">
-              {/* Header row: thumbnail + status */}
               <div className="flex gap-3 items-start">
                 <img
                   src={item.previewUrl}
@@ -363,12 +365,9 @@ const SubmitReceipt = () => {
                       <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
                     </div>
                   )}
-                  {item.status === "ocr" && (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <ScanSearch className="h-3.5 w-3.5 animate-pulse text-primary" /> Extracting data…
-                      </div>
-                      <Progress value={Math.round(item.ocrProgress * 100)} className="h-1.5" />
+                  {item.status === "extracting" && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <ScanSearch className="h-3.5 w-3.5 animate-pulse text-primary" /> AI extracting data…
                     </div>
                   )}
                   {item.status === "error" && (
@@ -381,9 +380,9 @@ const SubmitReceipt = () => {
                       <CheckCircle2 className="h-3.5 w-3.5" /> Submitted
                     </div>
                   )}
-                  {item.status === "ready" && item.ocrResult && (
-                    <Badge className={confidenceColor(item.ocrResult.ai_confidence)}>
-                      {Math.round(item.ocrResult.ai_confidence * 100)}% confidence
+                  {item.status === "ready" && item.aiConfidence != null && (
+                    <Badge className={confidenceColor(item.aiConfidence)}>
+                      {Math.round(item.aiConfidence * 100)}% confidence
                     </Badge>
                   )}
                 </div>
@@ -394,7 +393,6 @@ const SubmitReceipt = () => {
                 )}
               </div>
 
-              {/* Editable fields – only when ready */}
               {item.status === "ready" && (
                 <div className="space-y-2.5 pt-1 border-t border-border">
                   <div className="space-y-1">
@@ -474,8 +472,6 @@ const SubmitReceipt = () => {
         src={lightboxItem?.src ?? ""}
         open={!!lightboxItem}
         onOpenChange={(open) => { if (!open) setLightboxItem(null); }}
-        onVendorSelect={(v) => { if (lightboxItem) updateItem(lightboxItem.id, { vendor: v }); }}
-        onAmountSelect={(a) => { if (lightboxItem) updateItem(lightboxItem.id, { amount: a }); }}
       />
     </div>
   );

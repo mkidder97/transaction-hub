@@ -6,14 +6,38 @@ export interface MatchResult {
   status: "matched" | "needs_review" | "no_match";
 }
 
+/* ── Fuzzy vendor similarity (Dice coefficient on bigrams) ────────── */
+
+function bigrams(str: string): Set<string> {
+  const s = str.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const set = new Set<string>();
+  for (let i = 0; i < s.length - 1; i++) {
+    set.add(s.slice(i, i + 2));
+  }
+  return set;
+}
+
+function vendorSimilarity(a: string | null, b: string | null): number {
+  if (!a || !b) return 0;
+  const bg1 = bigrams(a);
+  const bg2 = bigrams(b);
+  if (bg1.size === 0 || bg2.size === 0) return 0;
+  let overlap = 0;
+  for (const bi of bg1) {
+    if (bg2.has(bi)) overlap++;
+  }
+  return (2 * overlap) / (bg1.size + bg2.size);
+}
+
+/* ── Match a single receipt to transactions ───────────────────────── */
+
 export async function matchReceiptToTransactions(
   receiptId: string,
 ): Promise<MatchResult> {
-  // 1. Fetch receipt
   const { data: receipt, error: rErr } = await supabase
     .from("receipts")
     .select(
-      "id, user_id, amount_confirmed, amount_extracted, date_confirmed, date_extracted",
+      "id, user_id, amount_confirmed, amount_extracted, date_confirmed, date_extracted, vendor_confirmed, vendor_extracted",
     )
     .eq("id", receiptId)
     .single();
@@ -28,21 +52,23 @@ export async function matchReceiptToTransactions(
     (receipt.date_confirmed as string | null) ??
     (receipt.date_extracted as string | null);
   const rDate = rDateStr ? new Date(rDateStr) : null;
+  const rVendor =
+    (receipt.vendor_confirmed as string | null) ??
+    (receipt.vendor_extracted as string | null);
 
   if (rAmount == null)
     return { transactionId: null, score: 0, status: "no_match" };
 
-  // 2. Fetch unmatched transactions for the same user
+  // Fetch unmatched transactions for the same user
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("id, amount, transaction_date")
+    .select("id, amount, transaction_date, vendor_raw, vendor_normalized")
     .eq("user_id", receipt.user_id)
     .eq("match_status", "unmatched");
 
   if (!transactions || transactions.length === 0)
     return { transactionId: null, score: 0, status: "no_match" };
 
-  // 3. Score each transaction
   let bestId: string | null = null;
   let bestScore = 0;
 
@@ -51,7 +77,7 @@ export async function matchReceiptToTransactions(
     const txAmount = tx.amount as number | null;
     const txDateStr = tx.transaction_date as string | null;
 
-    // Amount scoring
+    // Amount scoring (max 0.5)
     if (txAmount != null) {
       const diff = Math.abs(txAmount - rAmount);
       if (diff <= 0.01) {
@@ -61,7 +87,7 @@ export async function matchReceiptToTransactions(
       }
     }
 
-    // Date scoring
+    // Date scoring (max 0.3)
     if (rDate && txDateStr) {
       const txDate = new Date(txDateStr);
       const daysDiff = Math.abs(
@@ -74,19 +100,25 @@ export async function matchReceiptToTransactions(
       }
     }
 
+    // Vendor similarity scoring (max 0.2)
+    const txVendor = (tx.vendor_normalized as string | null) ?? (tx.vendor_raw as string | null);
+    const sim = vendorSimilarity(rVendor, txVendor);
+    score += sim * 0.2;
+
     if (score > bestScore) {
       bestScore = score;
       bestId = tx.id;
     }
   }
 
-  // 4. Classify
   if (bestScore >= 0.7)
     return { transactionId: bestId, score: bestScore, status: "matched" };
   if (bestScore >= 0.4)
     return { transactionId: bestId, score: bestScore, status: "needs_review" };
   return { transactionId: null, score: bestScore, status: "no_match" };
 }
+
+/* ── Run matching for an entire period ────────────────────────────── */
 
 export interface PeriodMatchSummary {
   matched: number;

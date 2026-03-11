@@ -58,6 +58,7 @@ const statusColor: Record<string, string> = {
 };
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [periodName, setPeriodName] = useState<string | null>(null);
   const [stats, setStats] = useState<StatCards>({ total: 0, approved: 0, flagged: 0, unmatched: 0 });

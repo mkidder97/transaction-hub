@@ -151,12 +151,24 @@ const SubmitReceipt = () => {
         });
         URL.revokeObjectURL(compressedUrl);
 
+        // Vendor dictionary lookup
+        let vendorName = result.vendor_extracted ?? "";
+        let autoCategoryId = "";
+        if (vendorName) {
+          const match = await lookupVendor(vendorName);
+          if (match) {
+            vendorName = match.canonical_name;
+            if (match.default_category_id) autoCategoryId = match.default_category_id;
+          }
+        }
+
         updateItem(item.id, {
           status: "ready",
           ocrResult: result,
-          vendor: result.vendor_extracted ?? "",
+          vendor: vendorName,
           amount: result.amount_extracted != null ? String(result.amount_extracted) : "",
           date: result.date_extracted ?? "",
+          categoryId: autoCategoryId,
           ocrProgress: 1,
         });
       } catch (err: any) {

@@ -118,7 +118,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 2: Unmatched Receipts", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Employee", "Vendor", "Amount", "Date", "Category", "Status"]],
     body: unmatched.map((row) => [

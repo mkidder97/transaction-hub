@@ -81,6 +81,7 @@ const EmployeeTransactions = () => {
   const [attachingTxId, setAttachingTxId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingTxRef = useRef<TransactionRow | null>(null);
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase

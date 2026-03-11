@@ -150,6 +150,10 @@ const Matching = () => {
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  // All receipts
+  const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
+  const [allLoading, setAllLoading] = useState(false);
+
   // Needs Review
   const [reviewReceipts, setReviewReceipts] = useState<ReceiptRow[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -232,6 +236,17 @@ const Matching = () => {
   }, []);
 
   /* ── Fetch tab data ─────────────────────────────────────────── */
+  const fetchAll = useCallback(async (pid: string) => {
+    setAllLoading(true);
+    const { data } = await supabase
+      .from("receipts")
+      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)")
+      .eq("statement_period_id", pid)
+      .order("created_at", { ascending: false });
+    setAllReceipts((data as unknown as ReceiptRow[]) ?? []);
+    setAllLoading(false);
+  }, []);
+
   const fetchReview = useCallback(async (pid: string) => {
     setReviewLoading(true);
     const { data } = await supabase
@@ -282,11 +297,12 @@ const Matching = () => {
 
   const refreshAll = useCallback((pid: string) => {
     fetchStats(pid);
+    fetchAll(pid);
     fetchReview(pid);
     fetchUnmatched(pid);
     fetchOrphans(pid);
     fetchMatched(pid);
-  }, [fetchStats, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched]);
+  }, [fetchStats, fetchAll, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched]);
 
   useEffect(() => {
     if (periodId) refreshAll(periodId);
@@ -379,20 +395,34 @@ const Matching = () => {
 
   /* ── Search modal helpers ───────────────────────────────────── */
   const openSearchTx = (receiptId: string) => {
-    setSearchModal({ type: "transaction", sourceId: receiptId });
+    // Find the receipt to auto-fill search fields
+    const receipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(r => r.id === receiptId);
+    const vendor = receipt ? (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "") : "";
+    const amount = receipt ? (receipt.amount_confirmed ?? receipt.amount_extracted) : null;
+    const tolerance = 0.5;
+
+    setSearchVendor(vendor);
+    setSearchAmountMin(amount != null ? String(Math.max(0, amount - tolerance)) : "");
+    setSearchAmountMax(amount != null ? String(amount + tolerance) : "");
     setSearchResults([]);
-    setSearchVendor("");
-    setSearchAmountMin("");
-    setSearchAmountMax("");
+    setSearchModal({ type: "transaction", sourceId: receiptId });
   };
 
   const openSearchReceipt = (txId: string) => {
-    setSearchModal({ type: "receipt", sourceId: txId });
-    setSearchResults([]);
     setSearchVendor("");
     setSearchAmountMin("");
     setSearchAmountMax("");
+    setSearchResults([]);
+    setSearchModal({ type: "receipt", sourceId: txId });
   };
+
+  // Auto-run search when modal opens with pre-filled data
+  useEffect(() => {
+    if (searchModal && (searchVendor || searchAmountMin || searchAmountMax)) {
+      runSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchModal]);
 
   const runSearch = async () => {
     if (!searchModal || !periodId) return;
@@ -466,11 +496,11 @@ const Matching = () => {
   const fmt = (n: number | null) => (n != null ? `$${Number(n).toFixed(2)}` : "—");
 
   const statCards = [
-    { label: "Total Receipts", value: stats.total, icon: <Files className="h-5 w-5" />, color: "text-foreground" },
-    { label: "Matched", value: stats.matched, icon: <FileCheck className="h-5 w-5" />, color: "text-accent" },
-    { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning" },
-    { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground" },
+    { label: "Total Receipts", value: stats.total, icon: <Files className="h-5 w-5" />, color: "text-foreground", tab: "all" },
+    { label: "Matched", value: stats.matched, icon: <FileCheck className="h-5 w-5" />, color: "text-accent", tab: "matched" },
+    { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", tab: "needs-review" },
+    { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive", tab: "unmatched" },
+    { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground", tab: "no-receipt" },
   ];
 
   /* ── Render ─────────────────────────────────────────────────── */
@@ -532,7 +562,14 @@ const Matching = () => {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {statCards.map((s) => (
-          <Card key={s.label}>
+          <Card
+            key={s.label}
+            className="cursor-pointer transition-colors hover:border-primary/40"
+            onClick={() => {
+              setActiveTab(s.tab);
+              setSearchParams({ tab: s.tab });
+            }}
+          >
             <CardContent className="p-4 flex flex-col gap-1">
               <div className={`flex items-center gap-2 ${s.color}`}>
                 {s.icon}
@@ -554,7 +591,10 @@ const Matching = () => {
           setSearchParams({ tab: v });
         }}
       >
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="all">
+            All{stats.total > 0 && ` (${stats.total})`}
+          </TabsTrigger>
           <TabsTrigger value="needs-review">
             Needs Review{stats.needsReview > 0 && ` (${stats.needsReview})`}
           </TabsTrigger>
@@ -564,8 +604,72 @@ const Matching = () => {
           <TabsTrigger value="no-receipt">
             No Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
           </TabsTrigger>
-          <TabsTrigger value="matched">Matched</TabsTrigger>
+          <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
         </TabsList>
+
+        {/* ── Tab: All Receipts ────────────────────────────────── */}
+        <TabsContent value="all">
+          {allLoading ? (
+            <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
+          ) : allReceipts.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
+                <Files className="h-10 w-10" />
+                <p className="text-sm">No receipts in this period.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Employee</TableHead>
+                    <TableHead>Vendor</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Match</TableHead>
+                    <TableHead>Matched Tx</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allReceipts.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
+                      <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
+                      <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
+                      <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                          {r.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] px-1.5 py-0 ${
+                            r.match_status === "matched" || r.match_status === "auto_matched" || r.match_status === "manual_match"
+                              ? "bg-accent/15 text-accent"
+                              : r.match_status === "needs_review"
+                              ? "bg-warning/15 text-warning"
+                              : "bg-destructive/15 text-destructive"
+                          }`}
+                        >
+                          {r.match_status === "auto_matched" ? "Auto" : r.match_status === "manual_match" ? "Manual" : r.match_status === "matched" ? "Matched" : r.match_status === "needs_review" ? "Review" : "Unmatched"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {r.transaction ? (
+                          <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
+                        ) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
 
         {/* ── Tab 1: Needs Review ──────────────────────────────── */}
         <TabsContent value="needs-review">

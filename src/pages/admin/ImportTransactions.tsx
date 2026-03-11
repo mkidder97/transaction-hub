@@ -219,7 +219,7 @@ const ImportTransactions = () => {
 
       if (source === "screenshot") {
         setRows([]);
-        setPreview(null);
+        setPreviews([]);
         if (fileRef.current) fileRef.current.value = "";
       } else {
         setCsvRawRows([]);

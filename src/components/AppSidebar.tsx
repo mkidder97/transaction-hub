@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FileText,
   GitCompare,
+  GitMerge,
   Settings,
   Users,
   Receipt as ReceiptIcon,

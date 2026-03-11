@@ -174,19 +174,37 @@ const Matching = () => {
   const [searchAmountMax, setSearchAmountMax] = useState("");
 
   /* ── Fetch periods ──────────────────────────────────────────── */
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+
   useEffect(() => {
     supabase
       .from("statement_periods")
-      .select("id, name, is_current")
+      .select("id, name, is_current, is_closed")
       .order("start_date", { ascending: false })
       .then(({ data }) => {
         if (data) {
-          setPeriods(data);
+          setPeriods(data as Period[]);
           const current = data.find((p) => p.is_current);
           if (current) setPeriodId(current.id);
         }
       });
   }, []);
+
+  const selectedPeriod = periods.find((p) => p.id === periodId);
+  const isClosed = selectedPeriod?.is_closed ?? false;
+
+  const handleDownloadReport = async () => {
+    if (!periodId) return;
+    setPdfGenerating(true);
+    try {
+      await generateReconciliationPdf(periodId);
+      toast.success("Report downloaded");
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to generate report");
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
 
   /* ── Fetch stats ────────────────────────────────────────────── */
   const fetchStats = useCallback(async (pid: string) => {

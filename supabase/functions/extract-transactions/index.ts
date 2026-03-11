@@ -142,7 +142,20 @@ serve(async (req) => {
     }
 
     const extracted = JSON.parse(toolCall.function.arguments);
-    return new Response(JSON.stringify({ transactions: extracted.transactions || [] }), {
+
+    // Sanity-check: if extracted year is >1 year in the past, adjust to current year
+    const currentYear = new Date().getFullYear();
+    const fixedTransactions = (extracted.transactions || []).map((tx: any) => {
+      if (tx.date && /^\d{4}-\d{2}-\d{2}$/.test(tx.date)) {
+        const extractedYear = parseInt(tx.date.substring(0, 4), 10);
+        if (currentYear - extractedYear > 1) {
+          tx.date = `${currentYear}-${tx.date.substring(5)}`;
+        }
+      }
+      return tx;
+    });
+
+    return new Response(JSON.stringify({ transactions: fixedTransactions }), {
       status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

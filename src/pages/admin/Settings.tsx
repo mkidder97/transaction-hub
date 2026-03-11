@@ -183,15 +183,21 @@ const AdminSettings = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground text-sm">
-          Manage statement periods, expense categories, and app configuration.
+          Manage statement periods, expense categories, vendors, and app configuration.
         </p>
       </div>
 
-      {/* ===== Statement Periods ===== */}
+      <Tabs defaultValue="general" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="general" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> General</TabsTrigger>
+          <TabsTrigger value="vendors" className="gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Vendors</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general" className="space-y-8">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base flex items-center gap-2">

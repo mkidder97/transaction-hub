@@ -354,25 +354,33 @@ const ImportTransactions = () => {
         {/* Screenshot Tab */}
         <TabsContent value="screenshot" className="space-y-4 mt-4">
           <div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleScreenshot} />
+            <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleScreenshot} />
             <Button variant="outline" className="gap-2" onClick={() => fileRef.current?.click()} disabled={ocrRunning || importing}>
-              <Upload className="h-4 w-4" /> Upload Screenshot
+              <Upload className="h-4 w-4" /> Upload Screenshots
             </Button>
           </div>
 
-          {preview && (
-            <Card className="overflow-hidden">
-              <CardContent className="p-0 relative">
-                <img src={preview} alt="Statement screenshot" className="w-full max-h-[300px] object-contain bg-muted" />
-                {ocrRunning && (
-                  <div className="absolute inset-0 bg-background/70 flex flex-col items-center justify-center gap-2">
-                    <ScanSearch className="h-8 w-8 animate-pulse text-primary" />
-                    <span className="text-sm font-medium">Extracting transactions…</span>
-                    <Progress value={Math.round(ocrProgress * 100)} className="h-2 w-48" />
+          {previews.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {previews.map((src, i) => (
+                  <Card key={i} className="overflow-hidden shrink-0 w-48">
+                    <CardContent className="p-0">
+                      <img src={src} alt={`Screenshot ${i + 1}`} className="w-full h-28 object-cover bg-muted" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+              {ocrRunning && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                  <ScanSearch className="h-5 w-5 animate-pulse text-primary shrink-0" />
+                  <div className="flex-1 space-y-1">
+                    <span className="text-sm font-medium">Extracting… ({ocrCurrent} of {ocrTotal})</span>
+                    <Progress value={Math.round(ocrProgress * 100)} className="h-2" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              )}
+            </div>
           )}
 
           {rows.length > 0 && !ocrRunning && (

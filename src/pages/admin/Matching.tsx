@@ -623,9 +623,11 @@ const Matching = () => {
                                       {fmt(s.amount)} · {s.date ?? "—"}
                                     </div>
                                   </div>
-                                  <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, s.transactionId, s.score)}>
-                                    <CheckCircle className="h-3 w-3 mr-1" /> Confirm
-                                  </Button>
+                                  {isClosed ? null : (
+                                    <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, s.transactionId, s.score)}>
+                                      <CheckCircle className="h-3 w-3 mr-1" /> Confirm
+                                    </Button>
+                                  )}
                                 </div>
                               ))}
                             </div>

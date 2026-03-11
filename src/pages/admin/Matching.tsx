@@ -45,8 +45,11 @@ import {
   Unlink,
   Flag,
   Image,
+  Download,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 

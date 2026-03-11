@@ -93,6 +93,7 @@ const ReceiptImageViewer = ({
       setRotation(0);
       scaleRef.current = 1;
       setScaleDisplay(100);
+      cancelAnimationFrame(rafRef.current);
       setWords([]);
       setOcrLoading(false);
       setMode(null);

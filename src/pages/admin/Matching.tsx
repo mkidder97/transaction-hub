@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
+import { runMatchingForPeriod } from "@/lib/matcher";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 

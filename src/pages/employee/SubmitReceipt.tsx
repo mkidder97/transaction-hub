@@ -258,6 +258,17 @@ const SubmitReceipt = () => {
       const { error } = await supabase.from("receipts").insert(rows);
       if (error) throw error;
 
+      // Submit vendor candidates for admin review
+      if (user) {
+        for (const item of readyItems) {
+          const ocrVendor = item.ocrResult?.vendor_extracted;
+          const confirmedVendor = item.vendor;
+          if (ocrVendor && confirmedVendor && ocrVendor !== confirmedVendor) {
+            await submitVendorCandidate(ocrVendor, confirmedVendor, item.categoryId || null, user.id);
+          }
+        }
+      }
+
       // Mark all as done
       setItems((prev) =>
         prev.map((i) => (readyItems.some((r) => r.id === i.id) ? { ...i, status: "done" as ItemStatus } : i)),

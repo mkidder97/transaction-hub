@@ -805,9 +805,13 @@ const Matching = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
-                          <Unlink className="h-3 w-3" />
-                        </Button>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
+                            <Unlink className="h-3 w-3" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

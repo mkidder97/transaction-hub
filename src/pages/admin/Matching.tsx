@@ -294,15 +294,17 @@ const Matching = () => {
 
   /* ── Run auto-match ─────────────────────────────────────────── */
   const handleRunMatch = async () => {
-    if (!periodId || !session?.access_token) return;
+    if (!periodId) return;
     setRunning(true);
     setBulkResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("match-receipt", {
-        body: { statementPeriod: periodId },
+      const result = await runMatchingForPeriod(periodId);
+      setBulkResult({
+        total: result.matched + result.needs_review + result.skipped,
+        autoMatched: result.matched,
+        needsReview: result.needs_review,
+        noMatch: result.skipped,
       });
-      if (error) throw error;
-      setBulkResult(data as BulkResult);
       toast.success("Auto-matching complete!");
       refreshAll(periodId);
     } catch (err: any) {

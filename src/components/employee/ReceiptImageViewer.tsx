@@ -93,7 +93,8 @@ const ReceiptImageViewer = ({
   useEffect(() => {
     if (open) {
       setRotation(0);
-      setScale(1);
+      scaleRef.current = 1;
+      setScaleDisplay(100);
       setWords([]);
       setOcrLoading(false);
       setMode(null);

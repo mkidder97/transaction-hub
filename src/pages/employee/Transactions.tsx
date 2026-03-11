@@ -297,7 +297,7 @@ const EmployeeTransactions = () => {
                         variant="outline"
                         className="h-7 gap-1 text-xs"
                         disabled={attachingTxId === t.id}
-                        onClick={() => handleAttachReceipt(t)}
+                        onClick={(e) => { e.stopPropagation(); handleAttachReceipt(t); }}
                       >
                         {attachingTxId === t.id ? (
                           <Loader2 className="h-3 w-3 animate-spin" />

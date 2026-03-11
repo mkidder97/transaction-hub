@@ -1,5 +1,12 @@
 import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import "jspdf-autotable";
+
+// Re-declare autoTable on jsPDF for TypeScript
+declare module "jspdf" {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
 import { supabase } from "@/integrations/supabase/client";
 
 export async function generateReconciliationPdf(periodId: string): Promise<void> {
@@ -88,7 +95,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 1: Matched Pairs", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Employee", "Receipt Vendor", "Receipt Amt", "Receipt Date", "Tx Vendor", "Tx Amt", "Tx Date", "Type", "Confidence"]],
     body: matched.map((row) => [
@@ -111,7 +118,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 2: Unmatched Receipts", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Employee", "Vendor", "Amount", "Date", "Category", "Status"]],
     body: unmatched.map((row) => [
@@ -131,7 +138,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 3: Transactions Without Receipt", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Date", "Vendor", "Amount", "Card", "Cardholder"]],
     body: unmatchedTxs.map((tx) => [
@@ -150,7 +157,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 4: Flagged Receipts", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Employee", "Vendor", "Amount", "Flag Reason"]],
     body: flagged.map((row) => [
@@ -168,7 +175,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 5: Category Breakdown", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Category", "Receipt Count", "Total Amount"]],
     body: categories.map((c) => [c.name, String(c.count), amt(c.total)]),

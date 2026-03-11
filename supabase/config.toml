@@ -1,1 +1,7 @@
 project_id = "tjclkyvijqjcmacohbmp"
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.extract-receipt]
+verify_jwt = false

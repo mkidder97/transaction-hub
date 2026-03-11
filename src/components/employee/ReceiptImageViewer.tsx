@@ -223,6 +223,18 @@ const ReceiptImageViewer = ({
     [mode, words, vendorWordIndices, onVendorSelect, onAmountSelect],
   );
 
+  /* ── ResizeObserver for accurate display dimensions ──────────────── */
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    const ro = new ResizeObserver(() => {
+      displaySizeRef.current = { w: img.offsetWidth, h: img.offsetHeight };
+      if (img.offsetWidth > 0) setOverlayReady(true);
+    });
+    ro.observe(img);
+    return () => ro.disconnect();
+  }, [words]);
+
   /* ── Render ─────────────────────────────────────────────────────── */
   const hasSelection = onVendorSelect || onAmountSelect;
   const ns = naturalSizeRef.current;

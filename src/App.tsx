@@ -20,6 +20,7 @@ import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminReceipts from "@/pages/admin/Receipts";
 import ImportTransactions from "@/pages/admin/ImportTransactions";
 import Reconciliation from "@/pages/admin/Reconciliation";
+import Matching from "@/pages/admin/Matching";
 import AdminSettings from "@/pages/admin/Settings";
 import AdminUsers from "@/pages/admin/Users";
 
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="/admin/receipts" element={<RoleGuard allowedRole="admin"><AdminReceipts /></RoleGuard>} />
               <Route path="/admin/import" element={<RoleGuard allowedRole="admin"><ImportTransactions /></RoleGuard>} />
               <Route path="/admin/reconciliation" element={<RoleGuard allowedRole="admin"><Reconciliation /></RoleGuard>} />
+              <Route path="/admin/matching" element={<RoleGuard allowedRole="admin"><Matching /></RoleGuard>} />
               <Route path="/admin/settings" element={<RoleGuard allowedRole="admin"><AdminSettings /></RoleGuard>} />
               <Route path="/admin/users" element={<RoleGuard allowedRole="admin"><AdminUsers /></RoleGuard>} />
             </Route>

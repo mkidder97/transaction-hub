@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Receipt, CheckCircle, Flag, FileX, Clock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 interface StatCards {
@@ -57,6 +58,7 @@ const statusColor: Record<string, string> = {
 };
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [periodName, setPeriodName] = useState<string | null>(null);
   const [stats, setStats] = useState<StatCards>({ total: 0, approved: 0, flagged: 0, unmatched: 0 });
@@ -139,7 +141,7 @@ const AdminDashboard = () => {
     { label: "Total Receipts", value: stats.total, icon: <Receipt className="h-5 w-5" />, color: "text-foreground" },
     { label: "Approved", value: stats.approved, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent" },
     { label: "Flagged", value: stats.flagged, icon: <Flag className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning" },
+    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=needs-review" },
   ];
 
   if (loading) {
@@ -167,7 +169,7 @@ const AdminDashboard = () => {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {statCards.map((s) => (
-          <Card key={s.label}>
+          <Card key={s.label} className={(s as any).link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => (s as any).link && navigate((s as any).link)}>
             <CardContent className="p-4 flex flex-col gap-1">
               <div className={`flex items-center gap-2 ${s.color}`}>
                 {s.icon}

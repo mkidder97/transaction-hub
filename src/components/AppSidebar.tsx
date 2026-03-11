@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   FileText,
   GitCompare,
+  GitMerge,
   Settings,
   Users,
   Receipt as ReceiptIcon,
@@ -38,6 +39,7 @@ const adminItems = [
   { title: "All Receipts", url: "/admin/receipts", icon: FileText },
   { title: "Import Transactions", url: "/admin/import", icon: Upload },
   { title: "Reconciliation", url: "/admin/reconciliation", icon: GitCompare },
+  { title: "Matching", url: "/admin/matching", icon: GitMerge },
   { title: "Settings", url: "/admin/settings", icon: Settings },
   { title: "Users", url: "/admin/users", icon: Users },
 ];

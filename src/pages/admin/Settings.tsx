@@ -376,6 +376,7 @@ const AdminSettings = () => {
         </TabsContent>
       </Tabs>
     </div>
+  );
 };
 
 export default AdminSettings;

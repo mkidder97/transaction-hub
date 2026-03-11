@@ -202,8 +202,8 @@ const ImportTransactions = () => {
         transaction_date: r.date || null,
         vendor_raw: r.vendor || null,
         amount: r.amount ? parseFloat(r.amount) : null,
-        card_last_four: r.card_last_four || null,
-        user_id: r.card_last_four ? cardUserMap[r.card_last_four] ?? null : null,
+        card_last_four: r.card_last_four ? r.card_last_four.replace(/\D/g, "").slice(-4) || null : null,
+        user_id: r.card_last_four ? cardUserMap[r.card_last_four.replace(/\D/g, "").slice(-4)] ?? null : null,
       }));
 
       const { error: txErr } = await supabase.from("transactions").insert(txRows);

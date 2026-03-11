@@ -226,26 +226,14 @@ const ReceiptImageViewer = ({
           initialScale={1}
           minScale={0.5}
           maxScale={5}
-          onTransformed={(_, state) => {
-            scaleRef.current = state.scale;
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = requestAnimationFrame(() => {
-              setScaleDisplay(Math.round(state.scale * 100));
-            });
-          }}
           panning={{ disabled: false }}
           doubleClick={{ disabled: true }}
         >
           {/* Top toolbar */}
           <ZoomToolbar
-            onRotate={() => setRotation((r) => r + 90)}
-            onClose={() => onOpenChange(false)}
+            onRotate={handleRotate}
+            onClose={handleClose}
           />
-
-          {/* Zoom percentage */}
-          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-50 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded">
-            {scaleDisplay}%
-          </div>
 
           {/* OCR loading indicator */}
           {ocrLoading && (

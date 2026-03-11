@@ -188,6 +188,7 @@ export type Database = {
           id: string
           match_confidence: number | null
           match_status: string
+          match_suggestions: Json | null
           notes: string | null
           photo_url: string | null
           reviewed_at: string | null
@@ -214,6 +215,7 @@ export type Database = {
           id?: string
           match_confidence?: number | null
           match_status?: string
+          match_suggestions?: Json | null
           notes?: string | null
           photo_url?: string | null
           reviewed_at?: string | null
@@ -240,6 +242,7 @@ export type Database = {
           id?: string
           match_confidence?: number | null
           match_status?: string
+          match_suggestions?: Json | null
           notes?: string | null
           photo_url?: string | null
           reviewed_at?: string | null
@@ -334,6 +337,7 @@ export type Database = {
           match_confidence: number | null
           match_status: string
           notes: string | null
+          receipt_id: string | null
           source: string
           statement_period_id: string | null
           transaction_date: string | null
@@ -351,6 +355,7 @@ export type Database = {
           match_confidence?: number | null
           match_status?: string
           notes?: string | null
+          receipt_id?: string | null
           source?: string
           statement_period_id?: string | null
           transaction_date?: string | null
@@ -368,6 +373,7 @@ export type Database = {
           match_confidence?: number | null
           match_status?: string
           notes?: string | null
+          receipt_id?: string | null
           source?: string
           statement_period_id?: string | null
           transaction_date?: string | null
@@ -382,6 +388,13 @@ export type Database = {
             columns: ["import_batch_id"]
             isOneToOne: false
             referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "receipts"
             referencedColumns: ["id"]
           },
           {

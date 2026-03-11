@@ -30,6 +30,8 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
 import { runOcr, type OcrResult } from "@/lib/ocr";
+import { lookupVendor, submitVendorCandidate } from "@/lib/vendorLookup";
+import ReceiptImageViewer from "@/components/employee/ReceiptImageViewer";
 
 interface Category {
   id: string;

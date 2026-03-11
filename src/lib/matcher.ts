@@ -169,7 +169,7 @@ export async function runMatchingForPeriod(
       await supabase
         .from("receipts")
         .update({
-          match_status: "manual_match",
+          match_status: "needs_review",
           transaction_id: result.transactionId,
           match_confidence: result.score,
         })

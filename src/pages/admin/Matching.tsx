@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
+import { runMatchingForPeriod } from "@/lib/matcher";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 
@@ -130,7 +131,7 @@ function scoreBadgeClass(score: number): string {
 
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
-  const { session } = useAuth();
+  
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "needs-review";
 
@@ -293,15 +294,17 @@ const Matching = () => {
 
   /* ── Run auto-match ─────────────────────────────────────────── */
   const handleRunMatch = async () => {
-    if (!periodId || !session?.access_token) return;
+    if (!periodId) return;
     setRunning(true);
     setBulkResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("match-receipt", {
-        body: { statementPeriod: periodId },
+      const result = await runMatchingForPeriod(periodId);
+      setBulkResult({
+        total: result.matched + result.needs_review + result.skipped,
+        autoMatched: result.matched,
+        needsReview: result.needs_review,
+        noMatch: result.skipped,
       });
-      if (error) throw error;
-      setBulkResult(data as BulkResult);
       toast.success("Auto-matching complete!");
       refreshAll(periodId);
     } catch (err: any) {

@@ -735,14 +735,18 @@ const Matching = () => {
                       <TableCell className="text-sm">{tx.transaction_date ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.card_last_four ? `•••• ${tx.card_last_four}` : "—"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
-                            <Search className="h-3 w-3 mr-1" /> Find Receipt
-                          </Button>
-                          <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
-                            <Flag className="h-3 w-3 mr-1" /> No Receipt
-                          </Button>
-                        </div>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
+                              <Search className="h-3 w-3 mr-1" /> Find Receipt
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
+                              <Flag className="h-3 w-3 mr-1" /> No Receipt
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

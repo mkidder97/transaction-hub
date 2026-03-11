@@ -50,6 +50,7 @@ import {
   CheckCircle,
   Flag,
   Link2,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 

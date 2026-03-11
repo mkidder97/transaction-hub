@@ -314,6 +314,12 @@ const EmployeeTransactions = () => {
           </Table>
         </div>
       )}
+
+      <TransactionDetailPanel
+        transactionId={selectedTxId}
+        open={!!selectedTxId}
+        onOpenChange={(open) => { if (!open) setSelectedTxId(null); }}
+      />
     </div>
   );
 };

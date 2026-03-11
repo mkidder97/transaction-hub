@@ -157,7 +157,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 4: Flagged Receipts", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Employee", "Vendor", "Amount", "Flag Reason"]],
     body: flagged.map((row) => [

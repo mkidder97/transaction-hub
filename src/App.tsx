@@ -20,6 +20,7 @@ import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminReceipts from "@/pages/admin/Receipts";
 import ImportTransactions from "@/pages/admin/ImportTransactions";
 import Reconciliation from "@/pages/admin/Reconciliation";
+import Matching from "@/pages/admin/Matching";
 import AdminSettings from "@/pages/admin/Settings";
 import AdminUsers from "@/pages/admin/Users";
 

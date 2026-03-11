@@ -554,7 +554,14 @@ const Matching = () => {
       {/* Stat cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {statCards.map((s) => (
-          <Card key={s.label}>
+          <Card
+            key={s.label}
+            className="cursor-pointer transition-colors hover:border-primary/40"
+            onClick={() => {
+              setActiveTab(s.tab);
+              setSearchParams({ tab: s.tab });
+            }}
+          >
             <CardContent className="p-4 flex flex-col gap-1">
               <div className={`flex items-center gap-2 ${s.color}`}>
                 {s.icon}

@@ -59,12 +59,13 @@ export async function matchReceiptToTransactions(
   if (rAmount == null)
     return { transactionId: null, score: 0, status: "no_match" };
 
-  // Fetch unmatched transactions for the same user
-  const { data: transactions } = await supabase
+  // Fetch unmatched transactions for the same user OR with no user assigned
+  let query = supabase
     .from("transactions")
-    .select("id, amount, transaction_date, vendor_raw, vendor_normalized")
-    .eq("user_id", receipt.user_id)
+    .select("id, amount, transaction_date, vendor_raw, vendor_normalized, user_id")
     .eq("match_status", "unmatched");
+
+  const { data: transactions } = await query.or(`user_id.eq.${receipt.user_id},user_id.is.null`);
 
   if (!transactions || transactions.length === 0)
     return { transactionId: null, score: 0, status: "no_match" };

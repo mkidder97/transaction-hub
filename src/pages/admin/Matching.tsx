@@ -45,8 +45,11 @@ import {
   Unlink,
   Flag,
   Image,
+  Download,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 
@@ -54,6 +57,7 @@ interface Period {
   id: string;
   name: string;
   is_current: boolean;
+  is_closed: boolean;
 }
 
 interface Stats {
@@ -170,19 +174,37 @@ const Matching = () => {
   const [searchAmountMax, setSearchAmountMax] = useState("");
 
   /* ── Fetch periods ──────────────────────────────────────────── */
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+
   useEffect(() => {
     supabase
       .from("statement_periods")
-      .select("id, name, is_current")
+      .select("id, name, is_current, is_closed")
       .order("start_date", { ascending: false })
       .then(({ data }) => {
         if (data) {
-          setPeriods(data);
+          setPeriods(data as Period[]);
           const current = data.find((p) => p.is_current);
           if (current) setPeriodId(current.id);
         }
       });
   }, []);
+
+  const selectedPeriod = periods.find((p) => p.id === periodId);
+  const isClosed = selectedPeriod?.is_closed ?? false;
+
+  const handleDownloadReport = async () => {
+    if (!periodId) return;
+    setPdfGenerating(true);
+    try {
+      await generateReconciliationPdf(periodId);
+      toast.success("Report downloaded");
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to generate report");
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
 
   /* ── Fetch stats ────────────────────────────────────────────── */
   const fetchStats = useCallback(async (pid: string) => {
@@ -474,9 +496,20 @@ const Matching = () => {
           </SelectContent>
         </Select>
 
-        <Button className="gap-2" onClick={handleRunMatch} disabled={running || !periodId}>
-          {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-          {running ? "Running…" : "Run Auto-Match"}
+        {isClosed ? (
+          <Badge variant="secondary" className="gap-1 py-1.5 px-3">
+            <Lock className="h-3.5 w-3.5" /> Period Closed
+          </Badge>
+        ) : (
+          <Button className="gap-2" onClick={handleRunMatch} disabled={running || !periodId}>
+            {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+            {running ? "Running…" : "Run Auto-Match"}
+          </Button>
+        )}
+
+        <Button variant="outline" className="gap-2" onClick={handleDownloadReport} disabled={pdfGenerating || !periodId}>
+          {pdfGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Download Report
         </Button>
       </div>
 
@@ -590,21 +623,27 @@ const Matching = () => {
                                       {fmt(s.amount)} · {s.date ?? "—"}
                                     </div>
                                   </div>
-                                  <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, s.transactionId, s.score)}>
-                                    <CheckCircle className="h-3 w-3 mr-1" /> Confirm
-                                  </Button>
+                                  {isClosed ? null : (
+                                    <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, s.transactionId, s.score)}>
+                                      <CheckCircle className="h-3 w-3 mr-1" /> Confirm
+                                    </Button>
+                                  )}
                                 </div>
                               ))}
                             </div>
                           )}
-                          <div className="flex gap-2 mt-2">
-                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                              <Search className="h-3 w-3 mr-1" /> Use Different
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
-                              <XCircle className="h-3 w-3 mr-1" /> No Match
-                            </Button>
-                          </div>
+                          {isClosed ? (
+                            <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                          ) : (
+                            <div className="flex gap-2 mt-2">
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
+                                <Search className="h-3 w-3 mr-1" /> Use Different
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
+                                <XCircle className="h-3 w-3 mr-1" /> No Match
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -646,9 +685,13 @@ const Matching = () => {
                       <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
                       <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                          <Search className="h-3 w-3 mr-1" /> Find Transaction
-                        </Button>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
+                            <Search className="h-3 w-3 mr-1" /> Find Transaction
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -691,14 +734,18 @@ const Matching = () => {
                       <TableCell className="text-sm">{tx.transaction_date ?? "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{tx.card_last_four ? `•••• ${tx.card_last_four}` : "—"}</TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
-                            <Search className="h-3 w-3 mr-1" /> Find Receipt
-                          </Button>
-                          <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
-                            <Flag className="h-3 w-3 mr-1" /> No Receipt
-                          </Button>
-                        </div>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
+                              <Search className="h-3 w-3 mr-1" /> Find Receipt
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
+                              <Flag className="h-3 w-3 mr-1" /> No Receipt
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -757,9 +804,13 @@ const Matching = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
-                          <Unlink className="h-3 w-3" />
-                        </Button>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
+                            <Unlink className="h-3 w-3" />
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

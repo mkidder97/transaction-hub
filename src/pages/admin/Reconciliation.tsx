@@ -50,6 +50,7 @@ import {
   CheckCircle,
   Flag,
   Link2,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,6 +58,7 @@ interface Period {
   id: string;
   name: string;
   is_current: boolean;
+  is_closed: boolean;
 }
 
 interface Stats {
@@ -136,16 +138,19 @@ const Reconciliation = () => {
   useEffect(() => {
     supabase
       .from("statement_periods")
-      .select("id, name, is_current")
+      .select("id, name, is_current, is_closed")
       .order("start_date", { ascending: false })
       .then(({ data }) => {
         if (data) {
-          setPeriods(data);
+          setPeriods(data as Period[]);
           const current = data.find((p) => p.is_current);
           if (current) setPeriodId(current.id);
         }
       });
   }, []);
+
+  const selectedPeriod = periods.find((p) => p.id === periodId);
+  const isClosed = selectedPeriod?.is_closed ?? false;
 
   // Fetch stats
   const fetchStats = useCallback(async (pid: string) => {
@@ -446,26 +451,30 @@ const Reconciliation = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleApprove(r.id)}>
-                            <CheckCircle className="h-3.5 w-3.5 mr-2 text-accent" /> Approve
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }}
-                          >
-                            <Flag className="h-3.5 w-3.5 mr-2 text-destructive" /> Flag
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openManualMatch(r)}>
-                            <Link2 className="h-3.5 w-3.5 mr-2 text-primary" /> Manual Match
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {isClosed ? (
+                        <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleApprove(r.id)}>
+                              <CheckCircle className="h-3.5 w-3.5 mr-2 text-accent" /> Approve
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }}
+                            >
+                              <Flag className="h-3.5 w-3.5 mr-2 text-destructive" /> Flag
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openManualMatch(r)}>
+                              <Link2 className="h-3.5 w-3.5 mr-2 text-primary" /> Manual Match
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

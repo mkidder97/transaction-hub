@@ -296,6 +296,8 @@ export type Database = {
       }
       statement_periods: {
         Row: {
+          closed_at: string | null
+          closed_by: string | null
           created_at: string
           end_date: string
           id: string
@@ -306,6 +308,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           end_date: string
           id?: string
@@ -316,6 +320,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          closed_at?: string | null
+          closed_by?: string | null
           created_at?: string
           end_date?: string
           id?: string

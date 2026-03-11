@@ -106,6 +106,7 @@ const SubmitReceipt = () => {
   const [items, setItems] = useState<ReceiptItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [submittingAll, setSubmittingAll] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);

@@ -451,26 +451,30 @@ const Reconciliation = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-7 w-7">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleApprove(r.id)}>
-                            <CheckCircle className="h-3.5 w-3.5 mr-2 text-accent" /> Approve
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }}
-                          >
-                            <Flag className="h-3.5 w-3.5 mr-2 text-destructive" /> Flag
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => openManualMatch(r)}>
-                            <Link2 className="h-3.5 w-3.5 mr-2 text-primary" /> Manual Match
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {isClosed ? (
+                        <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                      ) : (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleApprove(r.id)}>
+                              <CheckCircle className="h-3.5 w-3.5 mr-2 text-accent" /> Approve
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }}
+                            >
+                              <Flag className="h-3.5 w-3.5 mr-2 text-destructive" /> Flag
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openManualMatch(r)}>
+                              <Link2 className="h-3.5 w-3.5 mr-2 text-primary" /> Manual Match
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
                 );

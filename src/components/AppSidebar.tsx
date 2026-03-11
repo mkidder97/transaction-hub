@@ -4,7 +4,6 @@ import {
   CreditCard,
   LayoutDashboard,
   FileText,
-  GitCompare,
   GitMerge,
   Settings,
   Users,

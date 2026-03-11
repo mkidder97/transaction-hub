@@ -106,6 +106,38 @@ export type Database = {
           },
         ]
       }
+      known_vendors: {
+        Row: {
+          canonical_name: string
+          created_at: string
+          default_category_id: string | null
+          id: string
+          raw_name: string
+        }
+        Insert: {
+          canonical_name: string
+          created_at?: string
+          default_category_id?: string | null
+          id?: string
+          raw_name: string
+        }
+        Update: {
+          canonical_name?: string
+          created_at?: string
+          default_category_id?: string | null
+          id?: string
+          raw_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "known_vendors_default_category_id_fkey"
+            columns: ["default_category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           card_last_four: string | null
@@ -364,6 +396,51 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vendor_candidates: {
+        Row: {
+          created_at: string
+          id: string
+          raw_name: string
+          status: string
+          submitted_by: string | null
+          suggested_category_id: string | null
+          suggested_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          raw_name: string
+          status?: string
+          submitted_by?: string | null
+          suggested_category_id?: string | null
+          suggested_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          raw_name?: string
+          status?: string
+          submitted_by?: string | null
+          suggested_category_id?: string | null
+          suggested_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vendor_candidates_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vendor_candidates_suggested_category_id_fkey"
+            columns: ["suggested_category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
             referencedColumns: ["id"]
           },
         ]

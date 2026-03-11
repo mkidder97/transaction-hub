@@ -106,7 +106,7 @@ const SubmitReceipt = () => {
   const [items, setItems] = useState<ReceiptItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [submittingAll, setSubmittingAll] = useState(false);
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxItem, setLightboxItem] = useState<{ src: string; id: string } | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -346,7 +346,7 @@ const SubmitReceipt = () => {
                   src={item.previewUrl}
                   alt="Receipt"
                   className="w-16 h-20 object-cover rounded border border-border flex-shrink-0 cursor-zoom-in hover:opacity-80 transition-opacity"
-                  onClick={() => setLightboxSrc(item.previewUrl)}
+                  onClick={() => setLightboxItem({ src: item.previewUrl, id: item.id })}
                 />
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="text-sm font-medium truncate">
@@ -471,9 +471,11 @@ const SubmitReceipt = () => {
 
       {/* Image lightbox */}
       <ReceiptImageViewer
-        src={lightboxSrc ?? ""}
-        open={!!lightboxSrc}
-        onOpenChange={(open) => { if (!open) setLightboxSrc(null); }}
+        src={lightboxItem?.src ?? ""}
+        open={!!lightboxItem}
+        onOpenChange={(open) => { if (!open) setLightboxItem(null); }}
+        onVendorSelect={(v) => { if (lightboxItem) updateItem(lightboxItem.id, { vendor: v }); }}
+        onAmountSelect={(a) => { if (lightboxItem) updateItem(lightboxItem.id, { amount: a }); }}
       />
     </div>
   );

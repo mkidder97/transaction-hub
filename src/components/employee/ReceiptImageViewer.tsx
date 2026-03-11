@@ -116,9 +116,11 @@ const ReceiptImageViewer = ({
 
         if (cancelled) return;
 
-        const wordBoxes: WordBox[] = (result.data.words ?? [])
-          .filter((w: any) => w.text.trim().length > 0)
-          .map((w: any) => ({
+        // tesseract.js exposes words at runtime; cast to bypass strict types
+        const rawWords: any[] = (result.data as any).words ?? [];
+        const wordBoxes: WordBox[] = rawWords
+          .filter((w) => w.text?.trim().length > 0)
+          .map((w) => ({
             text: w.text.trim(),
             bbox: w.bbox,
           }));

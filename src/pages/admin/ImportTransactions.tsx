@@ -54,9 +54,11 @@ const ImportTransactions = () => {
   const { user } = useAuth();
 
   // Screenshot tab state
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [ocrTotal, setOcrTotal] = useState(0);
+  const [ocrCurrent, setOcrCurrent] = useState(0);
   const [rows, setRows] = useState<ParsedTransactionRow[]>([]);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);

@@ -630,14 +630,18 @@ const Matching = () => {
                               ))}
                             </div>
                           )}
-                          <div className="flex gap-2 mt-2">
-                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                              <Search className="h-3 w-3 mr-1" /> Use Different
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
-                              <XCircle className="h-3 w-3 mr-1" /> No Match
-                            </Button>
-                          </div>
+                          {isClosed ? (
+                            <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                          ) : (
+                            <div className="flex gap-2 mt-2">
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
+                                <Search className="h-3 w-3 mr-1" /> Use Different
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
+                                <XCircle className="h-3 w-3 mr-1" /> No Match
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </CardContent>

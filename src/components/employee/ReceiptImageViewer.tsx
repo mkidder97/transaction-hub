@@ -201,18 +201,16 @@ const ReceiptImageViewer = ({
       if (!word) return;
 
       if (mode === "vendor") {
-        setVendorWordIndices((prev) => {
-          const next = new Set(prev);
-          if (next.has(index)) next.delete(index);
-          else next.add(index);
+        const next = new Set(vendorWordIndices);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
 
-          const selectedText = Array.from(next)
-            .sort((a, b) => a - b)
-            .map((i) => words[i].text)
-            .join(" ");
-          onVendorSelect?.(selectedText);
-          return next;
-        });
+        const selectedText = Array.from(next)
+          .sort((a, b) => a - b)
+          .map((i) => words[i].text)
+          .join(" ");
+        setVendorWordIndices(next);
+        onVendorSelect?.(selectedText);
       } else if (mode === "amount") {
         setAmountWordIndex(index);
         let val = word.text;

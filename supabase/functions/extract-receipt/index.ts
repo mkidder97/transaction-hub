@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,35 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Download the image from storage (handles private buckets)
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    let imageDataUri: string;
+
+    // Try downloading with service role key for private buckets
+    const imgResponse = await fetch(imageUrl.replace("/object/public/", "/object/"), {
+      headers: {
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        apikey: SERVICE_ROLE_KEY!,
+      },
+    });
+
+    if (!imgResponse.ok) {
+      // Fallback: try the URL as-is (public bucket)
+      const fallback = await fetch(imageUrl);
+      if (!fallback.ok) {
+        throw new Error(`Failed to download image: ${fallback.status}`);
+      }
+      const bytes = new Uint8Array(await fallback.arrayBuffer());
+      const b64 = base64Encode(bytes);
+      imageDataUri = `data:image/jpeg;base64,${b64}`;
+    } else {
+      const bytes = new Uint8Array(await imgResponse.arrayBuffer());
+      const b64 = base64Encode(bytes);
+      imageDataUri = `data:image/jpeg;base64,${b64}`;
+    }
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -46,7 +76,7 @@ serve(async (req) => {
               content: [
                 {
                   type: "image_url",
-                  image_url: { url: imageUrl },
+                  image_url: { url: imageDataUri },
                 },
                 {
                   type: "text",

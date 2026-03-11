@@ -269,7 +269,7 @@ const EmployeeTransactions = () => {
             </TableHeader>
             <TableBody>
               {transactions.map((t) => (
-                <TableRow key={t.id}>
+                <TableRow key={t.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedTxId(t.id)}>
                   <TableCell className="text-sm">{t.transaction_date ?? "—"}</TableCell>
                   <TableCell className="text-sm font-medium truncate max-w-[200px]">
                     {t.vendor_normalized ?? t.vendor_raw ?? "—"}

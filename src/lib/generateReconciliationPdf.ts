@@ -138,7 +138,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 3: Transactions Without Receipt", 14, 20);
 
-  autoTable(doc, {
+  doc.autoTable({
     startY: 28,
     head: [["Date", "Vendor", "Amount", "Card", "Cardholder"]],
     body: unmatchedTxs.map((tx) => [

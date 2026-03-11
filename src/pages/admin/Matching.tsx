@@ -150,6 +150,10 @@ const Matching = () => {
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  // All receipts
+  const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
+  const [allLoading, setAllLoading] = useState(false);
+
   // Needs Review
   const [reviewReceipts, setReviewReceipts] = useState<ReceiptRow[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);

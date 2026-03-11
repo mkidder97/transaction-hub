@@ -693,7 +693,6 @@ const Matching = () => {
                           </Button>
                         )}
                       </TableCell>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

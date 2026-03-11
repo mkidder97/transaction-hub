@@ -57,6 +57,7 @@ interface Period {
   id: string;
   name: string;
   is_current: boolean;
+  is_closed: boolean;
 }
 
 interface Stats {

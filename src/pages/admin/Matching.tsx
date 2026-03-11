@@ -685,9 +685,14 @@ const Matching = () => {
                       <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
                       <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                          <Search className="h-3 w-3 mr-1" /> Find Transaction
-                        </Button>
+                        {isClosed ? (
+                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                        ) : (
+                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
+                            <Search className="h-3 w-3 mr-1" /> Find Transaction
+                          </Button>
+                        )}
+                      </TableCell>
                       </TableCell>
                     </TableRow>
                   ))}

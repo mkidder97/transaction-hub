@@ -488,11 +488,11 @@ const Matching = () => {
   const fmt = (n: number | null) => (n != null ? `$${Number(n).toFixed(2)}` : "—");
 
   const statCards = [
-    { label: "Total Receipts", value: stats.total, icon: <Files className="h-5 w-5" />, color: "text-foreground" },
-    { label: "Matched", value: stats.matched, icon: <FileCheck className="h-5 w-5" />, color: "text-accent" },
-    { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning" },
-    { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground" },
+    { label: "Total Receipts", value: stats.total, icon: <Files className="h-5 w-5" />, color: "text-foreground", tab: "all" },
+    { label: "Matched", value: stats.matched, icon: <FileCheck className="h-5 w-5" />, color: "text-accent", tab: "matched" },
+    { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", tab: "needs-review" },
+    { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive", tab: "unmatched" },
+    { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground", tab: "no-receipt" },
   ];
 
   /* ── Render ─────────────────────────────────────────────────── */

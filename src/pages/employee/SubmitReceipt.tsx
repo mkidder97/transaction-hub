@@ -345,7 +345,8 @@ const SubmitReceipt = () => {
                 <img
                   src={item.previewUrl}
                   alt="Receipt"
-                  className="w-16 h-20 object-cover rounded border border-border flex-shrink-0"
+                  className="w-16 h-20 object-cover rounded border border-border flex-shrink-0 cursor-zoom-in hover:opacity-80 transition-opacity"
+                  onClick={() => setLightboxSrc(item.previewUrl)}
                 />
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="text-sm font-medium truncate">

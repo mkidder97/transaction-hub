@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -15,8 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2 } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen } from "lucide-react";
 import { toast } from "sonner";
+import VendorManagement from "@/components/admin/VendorManagement";
 
 // ---------- Types ----------
 
@@ -181,15 +183,21 @@ const AdminSettings = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
         <p className="text-muted-foreground text-sm">
-          Manage statement periods, expense categories, and app configuration.
+          Manage statement periods, expense categories, vendors, and app configuration.
         </p>
       </div>
 
-      {/* ===== Statement Periods ===== */}
+      <Tabs defaultValue="general" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="general" className="gap-1.5"><Settings2 className="h-3.5 w-3.5" /> General</TabsTrigger>
+          <TabsTrigger value="vendors" className="gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Vendors</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general" className="space-y-8">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -361,6 +369,12 @@ const AdminSettings = () => {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="vendors">
+          <VendorManagement />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

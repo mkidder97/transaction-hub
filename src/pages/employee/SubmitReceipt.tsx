@@ -30,6 +30,8 @@ import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { format } from "date-fns";
 import { runOcr, type OcrResult } from "@/lib/ocr";
+import { lookupVendor, submitVendorCandidate } from "@/lib/vendorLookup";
+import ReceiptImageViewer from "@/components/employee/ReceiptImageViewer";
 
 interface Category {
   id: string;
@@ -104,6 +106,7 @@ const SubmitReceipt = () => {
   const [items, setItems] = useState<ReceiptItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [submittingAll, setSubmittingAll] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -148,12 +151,24 @@ const SubmitReceipt = () => {
         });
         URL.revokeObjectURL(compressedUrl);
 
+        // Vendor dictionary lookup
+        let vendorName = result.vendor_extracted ?? "";
+        let autoCategoryId = "";
+        if (vendorName) {
+          const match = await lookupVendor(vendorName);
+          if (match) {
+            vendorName = match.canonical_name;
+            if (match.default_category_id) autoCategoryId = match.default_category_id;
+          }
+        }
+
         updateItem(item.id, {
           status: "ready",
           ocrResult: result,
-          vendor: result.vendor_extracted ?? "",
+          vendor: vendorName,
           amount: result.amount_extracted != null ? String(result.amount_extracted) : "",
           date: result.date_extracted ?? "",
+          categoryId: autoCategoryId,
           ocrProgress: 1,
         });
       } catch (err: any) {
@@ -243,6 +258,17 @@ const SubmitReceipt = () => {
       const { error } = await supabase.from("receipts").insert(rows);
       if (error) throw error;
 
+      // Submit vendor candidates for admin review
+      if (user) {
+        for (const item of readyItems) {
+          const ocrVendor = item.ocrResult?.vendor_extracted;
+          const confirmedVendor = item.vendor;
+          if (ocrVendor && confirmedVendor && ocrVendor !== confirmedVendor) {
+            await submitVendorCandidate(ocrVendor, confirmedVendor, item.categoryId || null, user.id);
+          }
+        }
+      }
+
       // Mark all as done
       setItems((prev) =>
         prev.map((i) => (readyItems.some((r) => r.id === i.id) ? { ...i, status: "done" as ItemStatus } : i)),
@@ -319,7 +345,8 @@ const SubmitReceipt = () => {
                 <img
                   src={item.previewUrl}
                   alt="Receipt"
-                  className="w-16 h-20 object-cover rounded border border-border flex-shrink-0"
+                  className="w-16 h-20 object-cover rounded border border-border flex-shrink-0 cursor-zoom-in hover:opacity-80 transition-opacity"
+                  onClick={() => setLightboxSrc(item.previewUrl)}
                 />
                 <div className="flex-1 min-w-0 space-y-1">
                   <p className="text-sm font-medium truncate">
@@ -441,6 +468,13 @@ const SubmitReceipt = () => {
           Submit {readyCount} Receipt{readyCount !== 1 ? "s" : ""}
         </Button>
       )}
+
+      {/* Image lightbox */}
+      <ReceiptImageViewer
+        src={lightboxSrc ?? ""}
+        open={!!lightboxSrc}
+        onOpenChange={(open) => { if (!open) setLightboxSrc(null); }}
+      />
     </div>
   );
 };

@@ -94,29 +94,46 @@ const ImportTransactions = () => {
 
   const handleScreenshot = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPreview(url);
+    if (!file || !user) return;
+    const localUrl = URL.createObjectURL(file);
+    setPreview(localUrl);
     setRows([]);
     setOcrRunning(true);
     setOcrProgress(0);
     try {
-      const rawText = await runOcrRaw(url, setOcrProgress);
-      const parsed = parseTransactionList(rawText);
-      const asRows: ParsedTransactionRow[] = parsed.map((t) => ({
-        date: t.date,
-        vendor: t.vendor,
-        amount: String(t.amount),
-        card_last_four: "",
+      // Upload screenshot to storage for AI processing
+      const storagePath = `screenshots/${uuidv4()}.jpg`;
+      const { error: uploadErr } = await supabase.storage
+        .from("transaction-screenshots")
+        .upload(storagePath, file, { contentType: file.type, upsert: false });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
+      setOcrProgress(0.3);
+
+      // Call AI extraction edge function
+      const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+        "extract-transactions",
+        { body: { imageUrl: urlData.publicUrl } },
+      );
+      setOcrProgress(1);
+
+      if (extractErr) throw new Error(extractErr.message || "AI extraction failed");
+
+      const txRows: ParsedTransactionRow[] = (extractData?.transactions || []).map((t: any) => ({
+        date: t.date || "",
+        vendor: t.vendor || "Unknown",
+        amount: t.amount || "0",
+        card_last_four: t.card_last_four || "",
       }));
-      setRows(asRows);
-      if (asRows.length === 0) toast.error("No transactions detected — try a clearer screenshot of your transaction list.");
-    } catch {
-      toast.error("OCR extraction failed");
+      setRows(txRows);
+      if (txRows.length === 0) toast.error("No transactions detected — try a clearer screenshot.");
+    } catch (err: any) {
+      toast.error(err.message || "Extraction failed");
     } finally {
       setOcrRunning(false);
     }
-  }, []);
+  }, [user]);
 
   const updateRow = (idx: number, field: keyof ParsedTransactionRow, value: string) => {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, [field]: value } : r)));

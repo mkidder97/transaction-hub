@@ -206,13 +206,54 @@ const ImportTransactions = () => {
         user_id: r.card_last_four ? cardUserMap[r.card_last_four.replace(/\D/g, "").slice(-4)] ?? null : null,
       }));
 
-      const { error: txErr } = await supabase.from("transactions").insert(txRows);
+      const { data: insertedTxs, error: txErr } = await supabase.from("transactions").insert(txRows).select("id, user_id");
       if (txErr) throw txErr;
 
       await supabase
         .from("import_batches")
         .update({ status: "complete", imported_rows: sourceRows.length, failed_rows: 0 })
         .eq("id", batch.id);
+
+      // Auto-match: find unmatched receipts for each user and try to match
+      if (insertedTxs && insertedTxs.length > 0) {
+        const userIds = [...new Set(insertedTxs.map(t => t.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: unmatchedReceipts } = await supabase
+            .from("receipts")
+            .select("id")
+            .in("user_id", userIds)
+            .eq("match_status", "unmatched");
+          if (unmatchedReceipts) {
+            const { matchReceiptToTransactions } = await import("@/lib/matcher");
+            let autoMatched = 0;
+            for (const rec of unmatchedReceipts) {
+              const result = await matchReceiptToTransactions(rec.id);
+              if (result.status === "matched" && result.transactionId) {
+                await supabase.from("receipts").update({
+                  match_status: "matched",
+                  transaction_id: result.transactionId,
+                  match_confidence: result.score,
+                }).eq("id", rec.id);
+                await supabase.from("transactions").update({
+                  match_status: "matched",
+                  match_confidence: result.score,
+                  receipt_id: rec.id,
+                }).eq("id", result.transactionId);
+                autoMatched++;
+              } else if (result.status === "needs_review" && result.transactionId) {
+                await supabase.from("receipts").update({
+                  match_status: "manual_match",
+                  transaction_id: result.transactionId,
+                  match_confidence: result.score,
+                }).eq("id", rec.id);
+              }
+            }
+            if (autoMatched > 0) {
+              toast.success(`Auto-matched ${autoMatched} receipt(s) to transactions!`);
+            }
+          }
+        }
+      }
 
       toast.success(`${sourceRows.length} transactions imported successfully!`);
       fetchBatches();

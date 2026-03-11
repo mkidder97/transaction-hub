@@ -261,8 +261,34 @@ const SubmitReceipt = () => {
     }));
 
     try {
-      const { error } = await supabase.from("receipts").insert(rows);
+      const { data: inserted, error } = await supabase.from("receipts").insert(rows).select("id");
       if (error) throw error;
+
+      // Auto-match each newly submitted receipt to existing transactions
+      if (inserted) {
+        const { matchReceiptToTransactions } = await import("@/lib/matcher");
+        for (const rec of inserted) {
+          const result = await matchReceiptToTransactions(rec.id);
+          if (result.status === "matched" && result.transactionId) {
+            await supabase.from("receipts").update({
+              match_status: "matched",
+              transaction_id: result.transactionId,
+              match_confidence: result.score,
+            }).eq("id", rec.id);
+            await supabase.from("transactions").update({
+              match_status: "matched",
+              match_confidence: result.score,
+              receipt_id: rec.id,
+            }).eq("id", result.transactionId);
+          } else if (result.status === "needs_review" && result.transactionId) {
+            await supabase.from("receipts").update({
+              match_status: "manual_match",
+              transaction_id: result.transactionId,
+              match_confidence: result.score,
+            }).eq("id", rec.id);
+          }
+        }
+      }
 
       // Submit vendor candidates for admin review
       for (const item of readyItems) {

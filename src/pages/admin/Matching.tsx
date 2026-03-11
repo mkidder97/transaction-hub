@@ -131,7 +131,7 @@ function scoreBadgeClass(score: number): string {
 
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
-  const { session } = useAuth();
+  const { } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "needs-review";
 

@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +27,30 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Extract storage path from the public URL and download via service role
+    // URL format: .../storage/v1/object/public/transaction-screenshots/screenshots/uuid.jpg
+    const bucketPath = imageUrl.split("/transaction-screenshots/")[1];
+    if (!bucketPath) {
+      throw new Error("Could not parse storage path from imageUrl");
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    const { data: fileData, error: downloadErr } = await supabase.storage
+      .from("transaction-screenshots")
+      .download(bucketPath);
+
+    if (downloadErr || !fileData) {
+      throw new Error(`Failed to download image: ${downloadErr?.message || "No data"}`);
+    }
+
+    const arrayBuffer = await fileData.arrayBuffer();
+    const b64 = base64Encode(new Uint8Array(arrayBuffer));
+    const mimeType = bucketPath.endsWith(".png") ? "image/png" : "image/jpeg";
+    const dataUri = `data:${mimeType};base64,${b64}`;
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -44,7 +70,7 @@ serve(async (req) => {
             {
               role: "user",
               content: [
-                { type: "image_url", image_url: { url: imageUrl } },
+                { type: "image_url", image_url: { url: dataUri } },
                 {
                   type: "text",
                   text: "Extract all transaction rows from this statement screenshot. Return each transaction with date (YYYY-MM-DD), vendor name, amount (as a number), and card_last_four (if visible, otherwise empty string).",

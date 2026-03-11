@@ -95,46 +95,63 @@ const ImportTransactions = () => {
   useEffect(() => { fetchBatches(); }, [fetchBatches]);
 
   const handleScreenshot = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-    const localUrl = URL.createObjectURL(file);
-    setPreview(localUrl);
+    const files = e.target.files;
+    if (!files || files.length === 0 || !user) return;
+
+    const fileList = Array.from(files);
+    const localUrls = fileList.map((f) => URL.createObjectURL(f));
+    setPreviews(localUrls);
     setRows([]);
     setOcrRunning(true);
     setOcrProgress(0);
-    try {
-      // Upload screenshot to storage for AI processing
-      const storagePath = `screenshots/${uuidv4()}.jpg`;
-      const { error: uploadErr } = await supabase.storage
-        .from("transaction-screenshots")
-        .upload(storagePath, file, { contentType: file.type, upsert: false });
-      if (uploadErr) throw uploadErr;
+    setOcrTotal(fileList.length);
+    setOcrCurrent(0);
 
-      const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
-      setOcrProgress(0.3);
+    const allRows: ParsedTransactionRow[] = [];
+    let failCount = 0;
 
-      // Call AI extraction edge function
-      const { data: extractData, error: extractErr } = await supabase.functions.invoke(
-        "extract-transactions",
-        { body: { imageUrl: urlData.publicUrl } },
-      );
-      setOcrProgress(1);
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      setOcrCurrent(i + 1);
+      setOcrProgress((i) / fileList.length);
 
-      if (extractErr) throw new Error(extractErr.message || "AI extraction failed");
+      try {
+        const storagePath = `screenshots/${uuidv4()}.jpg`;
+        const { error: uploadErr } = await supabase.storage
+          .from("transaction-screenshots")
+          .upload(storagePath, file, { contentType: file.type, upsert: false });
+        if (uploadErr) throw uploadErr;
 
-      const txRows: ParsedTransactionRow[] = (extractData?.transactions || []).map((t: any) => ({
-        date: t.date || "",
-        vendor: t.vendor || "Unknown",
-        amount: t.amount || "0",
-        card_last_four: t.card_last_four || "",
-      }));
-      setRows(txRows);
-      if (txRows.length === 0) toast.error("No transactions detected — try a clearer screenshot.");
-    } catch (err: any) {
-      toast.error(err.message || "Extraction failed");
-    } finally {
-      setOcrRunning(false);
+        const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
+
+        const { data: extractData, error: extractErr } = await supabase.functions.invoke(
+          "extract-transactions",
+          { body: { imageUrl: urlData.publicUrl } },
+        );
+
+        if (extractErr) throw new Error(extractErr.message || "AI extraction failed");
+
+        const txRows: ParsedTransactionRow[] = (extractData?.transactions || []).map((t: any) => ({
+          date: t.date || "",
+          vendor: t.vendor || "Unknown",
+          amount: t.amount || "0",
+          card_last_four: t.card_last_four || "",
+        }));
+        allRows.push(...txRows);
+      } catch (err: any) {
+        failCount++;
+        toast.error(`Screenshot ${i + 1} failed: ${err.message || "Extraction error"}`);
+      }
     }
+
+    setOcrProgress(1);
+    setRows(allRows);
+    if (allRows.length === 0 && failCount === 0) {
+      toast.error("No transactions detected — try clearer screenshots.");
+    } else if (allRows.length > 0) {
+      toast.success(`Extracted ${allRows.length} transaction(s) from ${fileList.length - failCount} screenshot(s).`);
+    }
+    setOcrRunning(false);
   }, [user]);
 
   const updateRow = (idx: number, field: keyof ParsedTransactionRow, value: string) => {

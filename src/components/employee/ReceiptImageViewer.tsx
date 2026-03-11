@@ -28,11 +28,9 @@ const AMOUNT_RE = /^\$?[\d,]+\.\d{2}$/;
 /* ────────────────────── zoom toolbar (inside wrapper) ────────────── */
 
 const ZoomToolbar = ({
-  scale,
   onRotate,
   onClose,
 }: {
-  scale: number;
   onRotate: () => void;
   onClose: () => void;
 }) => {

@@ -240,7 +240,6 @@ const ReceiptImageViewer = ({
         >
           {/* Top toolbar */}
           <ZoomToolbar
-            scale={scale}
             onRotate={() => setRotation((r) => r + 90)}
             onClose={() => onOpenChange(false)}
           />

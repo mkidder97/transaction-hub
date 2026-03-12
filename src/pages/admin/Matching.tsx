@@ -130,6 +130,7 @@ interface ReceiptRow {
   photo_url: string | null;
   storage_path: string | null;
   user_id: string;
+  is_placeholder: boolean | null;
   employee: { full_name: string | null } | null;
   transaction: {
     id: string;

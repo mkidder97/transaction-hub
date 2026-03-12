@@ -285,6 +285,10 @@ const Matching = () => {
   const [searchAmountMin, setSearchAmountMin] = useState("");
   const [searchAmountMax, setSearchAmountMax] = useState("");
 
+  // Inline filter bar state
+  const [filterVendor, setFilterVendor] = useState("");
+  const [filterEmployee, setFilterEmployee] = useState("");
+
   /* ── Fetch periods ──────────────────────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
 

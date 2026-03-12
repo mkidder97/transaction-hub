@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 
 // Re-declare autoTable on jsPDF for TypeScript
 declare module "jspdf" {

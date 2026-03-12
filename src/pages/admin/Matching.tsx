@@ -47,7 +47,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Loader2,
-  Zap,
+  MoreHorizontal,
   FileCheck,
   AlertTriangle,
   FileX,

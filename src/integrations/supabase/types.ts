@@ -191,6 +191,7 @@ export type Database = {
           duplicate_status: string | null
           flag_reason: string | null
           id: string
+          is_placeholder: boolean | null
           match_confidence: number | null
           match_status: string
           match_suggestions: Json | null
@@ -220,6 +221,7 @@ export type Database = {
           duplicate_status?: string | null
           flag_reason?: string | null
           id?: string
+          is_placeholder?: boolean | null
           match_confidence?: number | null
           match_status?: string
           match_suggestions?: Json | null
@@ -249,6 +251,7 @@ export type Database = {
           duplicate_status?: string | null
           flag_reason?: string | null
           id?: string
+          is_placeholder?: boolean | null
           match_confidence?: number | null
           match_status?: string
           match_suggestions?: Json | null

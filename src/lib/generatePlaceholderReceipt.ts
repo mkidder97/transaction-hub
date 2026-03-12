@@ -11,7 +11,7 @@ interface PlaceholderTx {
   periodName: string | null;
 }
 
-export async function generatePlaceholderReceipt(tx: PlaceholderTx): Promise<void> {
+export async function buildPlaceholderBlob(tx: PlaceholderTx): Promise<Blob> {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 50;
@@ -120,12 +120,5 @@ export async function generatePlaceholderReceipt(tx: PlaceholderTx): Promise<voi
     { align: "center" }
   );
 
-  // Save
-  const vendorWord = (tx.vendor_normalized ?? tx.vendor_raw ?? "unknown")
-    .split(/\s+/)[0]
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  const date = tx.transaction_date ?? "undated";
-  const filename = `placeholder_${vendorWord}_${date}.pdf`;
-  doc.save(filename);
+  return doc.output("blob");
 }

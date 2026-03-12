@@ -107,12 +107,14 @@ const ImportTransactions = () => {
     const localUrls = fileList.map((f) => URL.createObjectURL(f));
     setPreviews(localUrls);
     setRows([]);
+    setScreenshotPaths([]);
     setOcrRunning(true);
     setOcrProgress(0);
     setOcrTotal(fileList.length);
     setOcrCurrent(0);
 
     const allRows: ParsedTransactionRow[] = [];
+    const allPaths: string[] = [];
     let failCount = 0;
 
     for (let i = 0; i < fileList.length; i++) {

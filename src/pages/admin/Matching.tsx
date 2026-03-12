@@ -324,7 +324,7 @@ const Matching = () => {
     setStatsLoading(true);
 
     const [{ data: receipts }, { data: txs }] = await Promise.all([
-      supabase.from("receipts").select("match_status").eq("statement_period_id", pid),
+      supabase.from("receipts").select("match_status, duplicate_status").eq("statement_period_id", pid),
       supabase.from("transactions").select("match_status").eq("statement_period_id", pid),
     ]);
 
@@ -336,7 +336,7 @@ const Matching = () => {
       matched: r.filter((x) => x.match_status === "auto_matched" || x.match_status === "manual_match" || x.match_status === "matched").length,
       autoMatched: r.filter((x) => x.match_status === "auto_matched").length,
       needsReview: r.filter((x) => x.match_status === "needs_review").length,
-      unmatched: r.filter((x) => x.match_status === "unmatched").length,
+      unmatched: r.filter((x: any) => x.match_status === "unmatched" && x.duplicate_status !== "confirmed_duplicate").length,
       txWithoutReceipt: t.filter((x) => x.match_status === "unmatched").length,
     });
     setStatsLoading(false);

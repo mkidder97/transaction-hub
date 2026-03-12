@@ -631,6 +631,11 @@ const Matching = () => {
   /* ── Placeholder handler ────────────────────────────────────── */
   const confirmPlaceholder = async () => {
     if (!placeholderTx || !periodId) return;
+    if (!placeholderTx.user_id) {
+      toast.error("This transaction has no employee assigned");
+      return;
+    }
+
     setPlaceholderLoading(true);
     try {
       const blob = await buildPlaceholderBlob({
@@ -644,7 +649,7 @@ const Matching = () => {
         periodName: selectedPeriod?.name ?? null,
       });
 
-      const storagePath = `placeholders/${placeholderTx.id}.pdf`;
+      const storagePath = `receipts/${placeholderTx.user_id}/placeholders/${placeholderTx.id}.pdf`;
       const { error: uploadError } = await supabase.storage
         .from("receipts")
         .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });

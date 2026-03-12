@@ -291,6 +291,12 @@ const Matching = () => {
 
   // Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+
+  const openLightbox = (url: string, isPdf = false) => {
+    setLightboxIsPdf(isPdf);
+    setLightboxUrl(url);
+  };
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);

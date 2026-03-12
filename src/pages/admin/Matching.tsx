@@ -847,7 +847,7 @@ const Matching = () => {
         <TabsContent value="all">
           {allLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : allReceipts.length === 0 ? (
+          ) : filteredAll.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <Files className="h-10 w-10" />

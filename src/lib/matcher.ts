@@ -106,6 +106,7 @@ export async function matchReceiptToTransactions(
     }
 
     // Date scoring (max 0.3)
+    // If both sides have dates but are >3 days apart, treat as invalid candidate.
     if (rDate && txDateStr) {
       const txDate = new Date(txDateStr);
       const daysDiff = Math.abs(
@@ -115,6 +116,8 @@ export async function matchReceiptToTransactions(
         score += 0.3;
       } else if (daysDiff <= 3) {
         score += 0.15;
+      } else {
+        continue;
       }
     }
 
@@ -130,6 +133,10 @@ export async function matchReceiptToTransactions(
       date: txDateStr,
       score,
     });
+  }
+
+  if (scored.length === 0) {
+    return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
   }
 
   // Sort descending by score
@@ -173,7 +180,7 @@ export async function runMatchingForPeriod(
     .from("receipts")
     .select("id")
     .eq("statement_period_id", periodId)
-    .eq("match_status", "unmatched");
+    .in("match_status", ["unmatched", "needs_review"]);
 
   if (!receipts || receipts.length === 0)
     return { matched: 0, needs_review: 0, skipped: 0 };
@@ -221,6 +228,16 @@ export async function runMatchingForPeriod(
 
       needs_review++;
     } else {
+      await supabase
+        .from("receipts")
+        .update({
+          match_status: "unmatched",
+          transaction_id: null,
+          match_confidence: null,
+          match_suggestions: null,
+        })
+        .eq("id", r.id);
+
       skipped++;
     }
   }

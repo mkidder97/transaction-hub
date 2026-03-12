@@ -211,14 +211,20 @@ async function matchSingleReceipt(
     return { receiptId, status: "no_match", score: 0 };
   }
 
-  // Score all candidates
-  const scored = transactions.map((tx: any) => ({
-    transactionId: tx.id,
-    vendor: tx.vendor_normalized ?? tx.vendor_raw,
-    amount: tx.amount,
-    date: tx.transaction_date,
-    score: computeScore(rAmount, rDate, rVendor, tx),
-  }));
+  // Score all candidates (drop rows with explicit date mismatch >3 days)
+  const scored = transactions
+    .map((tx: any) => ({
+      transactionId: tx.id,
+      vendor: tx.vendor_normalized ?? tx.vendor_raw,
+      amount: tx.amount,
+      date: tx.transaction_date,
+      score: computeScore(rAmount, rDate, rVendor, tx),
+    }))
+    .filter((candidate: any) => !(rDate && candidate.date && dateScore(rDate, candidate.date) === 0));
+
+  if (scored.length === 0) {
+    return { receiptId, status: "no_match", score: 0 };
+  }
 
   scored.sort((a: any, b: any) => b.score - a.score);
   const best = scored[0];

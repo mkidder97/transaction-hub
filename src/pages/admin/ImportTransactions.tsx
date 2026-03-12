@@ -77,6 +77,7 @@ const ImportTransactions = () => {
   });
   const [csvMapped, setCsvMapped] = useState<ParsedTransactionRow[]>([]);
   const [csvFilename, setCsvFilename] = useState<string | null>(null);
+  const [csvStoragePath, setCsvStoragePath] = useState<string | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
 

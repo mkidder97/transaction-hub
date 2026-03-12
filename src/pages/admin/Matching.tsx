@@ -324,7 +324,7 @@ const Matching = () => {
     setStatsLoading(true);
 
     const [{ data: receipts }, { data: txs }] = await Promise.all([
-      supabase.from("receipts").select("match_status").eq("statement_period_id", pid),
+      supabase.from("receipts").select("match_status, duplicate_status").eq("statement_period_id", pid),
       supabase.from("transactions").select("match_status").eq("statement_period_id", pid),
     ]);
 

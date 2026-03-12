@@ -204,7 +204,7 @@ export async function runMatchingForPeriod(
         .update({
           match_status: "needs_review",
           match_confidence: result.score,
-          match_suggestions: result.suggestions,
+          match_suggestions: result.suggestions as unknown as any,
           transaction_id: null,
         })
         .eq("id", r.id);

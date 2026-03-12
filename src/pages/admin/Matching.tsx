@@ -32,6 +32,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Loader2,
   Zap,
   FileCheck,
@@ -45,8 +51,10 @@ import {
   Unlink,
   Flag,
   Image,
+  ImageOff,
   Download,
   Lock,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
@@ -129,9 +137,60 @@ function scoreBadgeClass(score: number): string {
   return "bg-destructive/15 text-destructive";
 }
 
+/* ── Receipt thumbnail helper ────────────────────────────────────── */
+function ReceiptThumb({
+  url,
+  onClick,
+  size = 40,
+}: {
+  url: string | null;
+  onClick: (url: string) => void;
+  size?: number;
+}) {
+  if (!url) {
+    return (
+      <div
+        className="rounded bg-muted flex items-center justify-center"
+        style={{ width: size, height: size }}
+      >
+        <ImageOff className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+  return (
+    <img
+      src={url}
+      alt="Receipt"
+      className="rounded object-cover cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
+      style={{ width: size, height: size }}
+      onClick={() => onClick(url)}
+    />
+  );
+}
+
+/* ── Extracted indicator ─────────────────────────────────────────── */
+function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
+  const hasData = !!(receipt.vendor_extracted || receipt.vendor_confirmed);
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {hasData ? (
+            <CheckCircle className="h-4 w-4 text-accent" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-warning" />
+          )}
+        </TooltipTrigger>
+        <TooltipContent>
+          {hasData ? "AI extraction complete" : "AI extraction pending"}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
-  
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "needs-review";
 
@@ -149,6 +208,9 @@ const Matching = () => {
   const [running, setRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  // Lightbox
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
@@ -169,6 +231,9 @@ const Matching = () => {
   // Matched
   const [matchedReceipts, setMatchedReceipts] = useState<ReceiptRow[]>([]);
   const [matchedLoading, setMatchedLoading] = useState(false);
+
+  // Legacy tx fetch cache for needs_review cards with transaction_id but no suggestions
+  const [legacyTxCache, setLegacyTxCache] = useState<Record<string, { id: string; vendor_normalized: string | null; vendor_raw: string | null; amount: number | null; transaction_date: string | null }>>({});
 
   // Search modal
   const [searchModal, setSearchModal] = useState<{ type: "receipt" | "transaction"; sourceId: string } | null>(null);
@@ -308,6 +373,31 @@ const Matching = () => {
     if (periodId) refreshAll(periodId);
   }, [periodId, refreshAll]);
 
+  // Fetch legacy transactions for needs_review cards that have transaction_id but no suggestions
+  useEffect(() => {
+    const legacyReceipts = reviewReceipts.filter(
+      (r) => (!r.match_suggestions || (r.match_suggestions as MatchSuggestion[]).length === 0) && r.transaction_id
+    );
+    if (legacyReceipts.length === 0) return;
+
+    const txIds = legacyReceipts.map((r) => r.transaction_id!).filter((id) => !legacyTxCache[id]);
+    if (txIds.length === 0) return;
+
+    supabase
+      .from("transactions")
+      .select("id, vendor_normalized, vendor_raw, amount, transaction_date")
+      .in("id", txIds)
+      .then(({ data }) => {
+        if (data) {
+          const cache: typeof legacyTxCache = {};
+          for (const tx of data) {
+            cache[tx.id] = tx as any;
+          }
+          setLegacyTxCache((prev) => ({ ...prev, ...cache }));
+        }
+      });
+  }, [reviewReceipts]);
+
   /* ── Run auto-match ─────────────────────────────────────────── */
   const handleRunMatch = async () => {
     if (!periodId) return;
@@ -395,7 +485,6 @@ const Matching = () => {
 
   /* ── Search modal helpers ───────────────────────────────────── */
   const openSearchTx = (receiptId: string) => {
-    // Find the receipt to auto-fill search fields
     const receipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(r => r.id === receiptId);
     const vendor = receipt ? (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "") : "";
     const amount = receipt ? (receipt.amount_confirmed ?? receipt.amount_extracted) : null;
@@ -503,6 +592,11 @@ const Matching = () => {
     { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground", tab: "no-receipt" },
   ];
 
+  // Count receipts missing extraction in unmatched tab
+  const missingExtractionCount = unmatchedReceipts.filter(
+    (r) => !r.vendor_extracted && !r.vendor_confirmed
+  ).length;
+
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className="space-y-6">
@@ -593,16 +687,16 @@ const Matching = () => {
       >
         <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="all">
-            All{stats.total > 0 && ` (${stats.total})`}
+            All Receipts{stats.total > 0 && ` (${stats.total})`}
           </TabsTrigger>
           <TabsTrigger value="needs-review">
             Needs Review{stats.needsReview > 0 && ` (${stats.needsReview})`}
           </TabsTrigger>
           <TabsTrigger value="unmatched">
-            Unmatched{stats.unmatched > 0 && ` (${stats.unmatched})`}
+            No Match Found{stats.unmatched > 0 && ` (${stats.unmatched})`}
           </TabsTrigger>
           <TabsTrigger value="no-receipt">
-            No Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
+            Tx Missing Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
           </TabsTrigger>
           <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
         </TabsList>
@@ -623,6 +717,8 @@ const Matching = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">Photo</TableHead>
+                    <TableHead className="w-10">AI</TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Vendor</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
@@ -635,6 +731,12 @@ const Matching = () => {
                 <TableBody>
                   {allReceipts.map((r) => (
                     <TableRow key={r.id}>
+                      <TableCell>
+                        <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                      </TableCell>
+                      <TableCell>
+                        <ExtractedIndicator receipt={r} />
+                      </TableCell>
                       <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
                       <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
@@ -686,12 +788,32 @@ const Matching = () => {
             <div className="space-y-4">
               {reviewReceipts.map((r) => {
                 const suggestions = (r.match_suggestions ?? []) as MatchSuggestion[];
+                const legacyTx = suggestions.length === 0 && r.transaction_id ? legacyTxCache[r.transaction_id] : null;
+
                 return (
                   <Card key={r.id}>
                     <CardContent className="p-4">
                       <div className="grid md:grid-cols-2 gap-4">
-                        {/* Left: receipt info */}
+                        {/* Left: receipt info + thumbnail */}
                         <div className="space-y-2">
+                          {r.photo_url && (
+                            <div className="mb-2">
+                              <img
+                                src={r.photo_url}
+                                alt="Receipt"
+                                className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
+                                onClick={() => setLightboxUrl(r.photo_url)}
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
+                                onClick={() => setLightboxUrl(r.photo_url)}
+                              >
+                                <ExternalLink className="h-3 w-3" /> View Receipt
+                              </Button>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
                             <Image className="h-4 w-4 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">Receipt</span>
@@ -713,11 +835,10 @@ const Matching = () => {
                             <CreditCard className="h-4 w-4 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">Candidate Transactions</span>
                           </div>
-                          {suggestions.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No candidates stored.</p>
-                          ) : (
+
+                          {suggestions.length > 0 ? (
                             <div className="space-y-2">
-                              {suggestions.map((s, i) => (
+                              {suggestions.map((s) => (
                                 <div key={s.transactionId} className="flex items-center justify-between border rounded-md p-2 text-sm">
                                   <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
@@ -738,7 +859,32 @@ const Matching = () => {
                                 </div>
                               ))}
                             </div>
+                          ) : legacyTx ? (
+                            /* Legacy data: transaction_id set but no suggestions stored */
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between border rounded-md p-2 text-sm border-warning/30">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">
+                                      —
+                                    </Badge>
+                                    <span className="font-medium truncate">{legacyTx.vendor_normalized ?? legacyTx.vendor_raw ?? "—"}</span>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                    {fmt(legacyTx.amount)} · {legacyTx.transaction_date ?? "—"}
+                                  </div>
+                                </div>
+                                {!isClosed && (
+                                  <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, legacyTx.id, r.match_confidence ?? 0)}>
+                                    <CheckCircle className="h-3 w-3 mr-1" /> Confirm
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No candidates stored.</p>
                           )}
+
                           {isClosed ? (
                             <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
                           ) : (
@@ -761,7 +907,7 @@ const Matching = () => {
           )}
         </TabsContent>
 
-        {/* ── Tab 2: Unmatched Receipts ────────────────────────── */}
+        {/* ── Tab 2: No Match Found ────────────────────────────── */}
         <TabsContent value="unmatched">
           {unmatchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -773,42 +919,63 @@ const Matching = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="w-32" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {unmatchedReceipts.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
-                      <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
-                      <TableCell>
-                        {isClosed ? (
-                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
-                        ) : (
-                          <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                            <Search className="h-3 w-3 mr-1" /> Find Transaction
-                          </Button>
-                        )}
-                      </TableCell>
+            <div className="space-y-3">
+              {/* Missing extraction banner */}
+              {missingExtractionCount > 0 && (
+                <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{missingExtractionCount} receipt(s) are missing AI extraction — they cannot be matched until vendor and amount are read. Open each receipt and use "Parse with AI" to extract the data.</span>
+                </div>
+              )}
+
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Photo</TableHead>
+                      <TableHead className="w-10">AI</TableHead>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="w-32" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {unmatchedReceipts.map((r) => {
+                      const missingExtraction = !r.vendor_extracted && !r.vendor_confirmed;
+                      return (
+                        <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
+                          <TableCell>
+                            <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                          </TableCell>
+                          <TableCell>
+                            <ExtractedIndicator receipt={r} />
+                          </TableCell>
+                          <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
+                          <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
+                          <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
+                          <TableCell>
+                            {isClosed ? (
+                              <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                            ) : (
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
+                                <Search className="h-3 w-3 mr-1" /> Find Transaction
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </TabsContent>
 
-        {/* ── Tab 3: Transactions Without Receipt ──────────────── */}
+        {/* ── Tab 3: Tx Missing Receipt ────────────────────────── */}
         <TabsContent value="no-receipt">
           {orphanLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -862,7 +1029,7 @@ const Matching = () => {
           )}
         </TabsContent>
 
-        {/* ── Tab 4: Matched (read-only) ───────────────────────── */}
+        {/* ── Tab 4: Matched ───────────────────────────────────── */}
         <TabsContent value="matched">
           {matchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -878,6 +1045,7 @@ const Matching = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">Photo</TableHead>
                     <TableHead>Employee</TableHead>
                     <TableHead>Receipt Vendor</TableHead>
                     <TableHead className="text-right">Receipt Amt</TableHead>
@@ -892,6 +1060,9 @@ const Matching = () => {
                 <TableBody>
                   {matchedReceipts.map((r) => (
                     <TableRow key={r.id}>
+                      <TableCell>
+                        <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                      </TableCell>
                       <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
                       <TableCell className="text-sm text-right">{fmt(ra(r))}</TableCell>
@@ -977,6 +1148,13 @@ const Matching = () => {
               <p className="text-sm text-muted-foreground text-center py-4">Enter filters and search to find matches.</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Image Lightbox ────────────────────────────────────── */}
+      <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
         </DialogContent>
       </Dialog>
     </div>

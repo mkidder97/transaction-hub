@@ -296,17 +296,39 @@ const Matching = () => {
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("statement_periods")
-      .select("id, name, is_current, is_closed")
-      .order("start_date", { ascending: false })
-      .then(({ data }) => {
-        if (data) {
-          setPeriods(data as Period[]);
-          const current = data.find((p) => p.is_current);
-          if (current) setPeriodId(current.id);
-        }
-      });
+    // Fetch periods, vendors, and employees in parallel
+    Promise.all([
+      supabase
+        .from("statement_periods")
+        .select("id, name, is_current, is_closed")
+        .order("start_date", { ascending: false }),
+      supabase
+        .from("known_vendors")
+        .select("canonical_name")
+        .order("canonical_name"),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("is_active", true)
+        .order("full_name"),
+    ]).then(([periodsRes, vendorsRes, employeesRes]) => {
+      if (periodsRes.data) {
+        setPeriods(periodsRes.data as Period[]);
+        const current = periodsRes.data.find((p) => p.is_current);
+        if (current) setPeriodId(current.id);
+      }
+      if (vendorsRes.data) {
+        const unique = [...new Set(vendorsRes.data.map((v) => v.canonical_name))];
+        setVendorOptions(unique);
+      }
+      if (employeesRes.data) {
+        setEmployeeOptions(
+          employeesRes.data
+            .filter((e) => e.full_name)
+            .map((e) => ({ id: e.id, name: e.full_name! }))
+        );
+      }
+    });
   }, []);
 
   const selectedPeriod = periods.find((p) => p.id === periodId);

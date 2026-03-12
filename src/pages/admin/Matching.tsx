@@ -289,9 +289,7 @@ const Matching = () => {
   // Inline filter bar state
   const [filterVendor, setFilterVendor] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
-  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<{ id: string; name: string }[]>([]);
-  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
 
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);

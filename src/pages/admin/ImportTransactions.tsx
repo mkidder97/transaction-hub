@@ -472,7 +472,7 @@ const ImportTransactions = () => {
             <>
               <p className="text-sm text-muted-foreground">{rows.length} row(s) detected — review and edit before importing.</p>
               <EditableTable data={rows} onUpdate={updateRow} onRemove={removeRow} />
-              <Button className="gap-2" onClick={() => confirmImport(rows, "screenshot", null)} disabled={importing}>
+              <Button className="gap-2" onClick={() => confirmImport(rows, "screenshot", null, screenshotPaths)} disabled={importing}>
                 {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Confirm Import ({rows.length})
               </Button>

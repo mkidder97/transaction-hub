@@ -7,10 +7,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Receipt as ReceiptIcon } from "lucide-react";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 
 interface ReceiptRow {
   id: string;
   photo_url: string | null;
+  storage_path: string | null;
   vendor_extracted: string | null;
   vendor_confirmed: string | null;
   amount_extracted: number | null;
@@ -71,6 +73,8 @@ export function ReceiptDetailPanel({
   receipt: ReceiptRow | null;
   onClose: () => void;
 }) {
+  const signedUrl = useSignedUrl(receipt?.storage_path ?? null);
+
   if (!receipt) return null;
 
   const r = receipt;
@@ -85,9 +89,9 @@ export function ReceiptDetailPanel({
         <div className="mt-4 space-y-5">
           {/* Image */}
           <div className="rounded-lg overflow-hidden bg-muted aspect-[3/4] max-h-72 flex items-center justify-center">
-            {r.photo_url ? (
+            {signedUrl ? (
               <img
-                src={r.photo_url}
+                src={signedUrl}
                 alt="Receipt"
                 className="w-full h-full object-contain"
               />

@@ -55,10 +55,13 @@ import {
   Download,
   Lock,
   ExternalLink,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 import { runMatchingForPeriod } from "@/lib/matcher";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
+import { detectDuplicatesForPeriod, DuplicateGroup } from "@/lib/duplicateDetector";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 
@@ -101,6 +104,7 @@ interface ReceiptRow {
   transaction_id: string | null;
   ai_confidence: number | null;
   photo_url: string | null;
+  storage_path: string | null;
   user_id: string;
   employee: { full_name: string | null } | null;
   transaction: {
@@ -137,17 +141,19 @@ function scoreBadgeClass(score: number): string {
   return "bg-destructive/15 text-destructive";
 }
 
-/* ── Receipt thumbnail helper ────────────────────────────────────── */
+/* ── Receipt thumbnail helper (signed URL) ───────────────────────── */
 function ReceiptThumb({
-  url,
+  storagePath,
   onClick,
   size = 40,
 }: {
-  url: string | null;
+  storagePath: string | null;
   onClick: (url: string) => void;
   size?: number;
 }) {
-  if (!url) {
+  const url = useSignedUrl(storagePath);
+
+  if (!storagePath || !url) {
     return (
       <div
         className="rounded bg-muted flex items-center justify-center"
@@ -165,6 +171,36 @@ function ReceiptThumb({
       style={{ width: size, height: size }}
       onClick={() => onClick(url)}
     />
+  );
+}
+
+/* ── Review card thumbnail (signed URL) ──────────────────────────── */
+function ReviewCardThumb({
+  storagePath,
+  onOpen,
+}: {
+  storagePath: string | null;
+  onOpen: (url: string) => void;
+}) {
+  const url = useSignedUrl(storagePath);
+  if (!storagePath || !url) return null;
+  return (
+    <div className="mb-2">
+      <img
+        src={url}
+        alt="Receipt"
+        className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
+        onClick={() => onOpen(url)}
+      />
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
+        onClick={() => onOpen(url)}
+      >
+        <ExternalLink className="h-3 w-3" /> View Receipt
+      </Button>
+    </div>
   );
 }
 
@@ -233,6 +269,10 @@ const Matching = () => {
   // Matched
   const [matchedReceipts, setMatchedReceipts] = useState<ReceiptRow[]>([]);
   const [matchedLoading, setMatchedLoading] = useState(false);
+
+  // Duplicates
+  const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
 
   // Legacy tx fetch cache for needs_review cards with transaction_id but no suggestions
   const [legacyTxCache, setLegacyTxCache] = useState<Record<string, { id: string; vendor_normalized: string | null; vendor_raw: string | null; amount: number | null; transaction_date: string | null }>>({});
@@ -303,11 +343,13 @@ const Matching = () => {
   }, []);
 
   /* ── Fetch tab data ─────────────────────────────────────────── */
+  const selectFields = "id, storage_path, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id";
+
   const fetchAll = useCallback(async (pid: string) => {
     setAllLoading(true);
     const { data } = await supabase
       .from("receipts")
-      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)")
+      .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)`)
       .eq("statement_period_id", pid)
       .order("created_at", { ascending: false });
     setAllReceipts((data as unknown as ReceiptRow[]) ?? []);
@@ -318,7 +360,7 @@ const Matching = () => {
     setReviewLoading(true);
     const { data } = await supabase
       .from("receipts")
-      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name)")
+      .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name)`)
       .eq("statement_period_id", pid)
       .eq("match_status", "needs_review")
       .order("match_confidence", { ascending: false });
@@ -330,7 +372,7 @@ const Matching = () => {
     setUnmatchedLoading(true);
     const { data } = await supabase
       .from("receipts")
-      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name)")
+      .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name)`)
       .eq("statement_period_id", pid)
       .eq("match_status", "unmatched")
       .order("created_at", { ascending: false });
@@ -354,12 +396,19 @@ const Matching = () => {
     setMatchedLoading(true);
     const { data } = await supabase
       .from("receipts")
-      .select("id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)")
+      .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name), transaction:transactions!receipts_transaction_id_fkey(id, vendor_normalized, vendor_raw, amount, transaction_date)`)
       .eq("statement_period_id", pid)
       .in("match_status", ["auto_matched", "manual_match", "matched"])
       .order("match_confidence", { ascending: false });
     setMatchedReceipts((data as unknown as ReceiptRow[]) ?? []);
     setMatchedLoading(false);
+  }, []);
+
+  const fetchDuplicates = useCallback(async (pid: string) => {
+    setDuplicatesLoading(true);
+    const groups = await detectDuplicatesForPeriod(pid);
+    setDuplicateGroups(groups);
+    setDuplicatesLoading(false);
   }, []);
 
   const refreshAll = useCallback((pid: string) => {
@@ -369,13 +418,14 @@ const Matching = () => {
     fetchUnmatched(pid);
     fetchOrphans(pid);
     fetchMatched(pid);
-  }, [fetchStats, fetchAll, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched]);
+    fetchDuplicates(pid);
+  }, [fetchStats, fetchAll, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched, fetchDuplicates]);
 
   useEffect(() => {
     if (periodId) refreshAll(periodId);
   }, [periodId, refreshAll]);
 
-  // Fetch legacy transactions for needs_review cards that have transaction_id but no suggestions
+  // Fetch legacy transactions for needs_review cards with transaction_id but no suggestions
   useEffect(() => {
     const legacyReceipts = reviewReceipts.filter(
       (r) => (!r.match_suggestions || (r.match_suggestions as MatchSuggestion[]).length === 0) && r.transaction_id
@@ -482,6 +532,28 @@ const Matching = () => {
       .update({ match_status: "no_receipt", notes: "Flagged as no receipt needed" })
       .eq("id", txId);
     toast.success("Flagged");
+    refreshAll(periodId);
+  };
+
+  /* ── Duplicate handlers ─────────────────────────────────────── */
+  const confirmDuplicate = async (duplicateId: string, originalId: string) => {
+    await supabase
+      .from("receipts")
+      .update({
+        duplicate_status: "confirmed_duplicate",
+        duplicate_of_id: originalId,
+      } as any)
+      .eq("id", duplicateId);
+    toast.success("Marked as duplicate");
+    refreshAll(periodId);
+  };
+
+  const dismissDuplicate = async (duplicateId: string, originalId: string) => {
+    await supabase
+      .from("receipts")
+      .update({ duplicate_status: "not_duplicate" } as any)
+      .in("id", [duplicateId, originalId]);
+    toast.success("Dismissed — kept both");
     refreshAll(periodId);
   };
 
@@ -592,6 +664,7 @@ const Matching = () => {
     { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", tab: "needs-review" },
     { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive", tab: "unmatched" },
     { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground", tab: "no-receipt" },
+    { label: "Suspected Duplicates", value: duplicateGroups.length, icon: <Copy className="h-5 w-5" />, color: "text-orange-500", tab: "duplicates" },
   ];
 
   // Count receipts missing extraction in unmatched tab
@@ -656,7 +729,7 @@ const Matching = () => {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {statCards.map((s) => (
           <Card
             key={s.label}
@@ -687,7 +760,7 @@ const Matching = () => {
           setSearchParams({ tab: v });
         }}
       >
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="all">
             All Receipts{stats.total > 0 && ` (${stats.total})`}
           </TabsTrigger>
@@ -701,6 +774,9 @@ const Matching = () => {
             Tx Missing Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
           </TabsTrigger>
           <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
+          <TabsTrigger value="duplicates">
+            Duplicates{duplicateGroups.length > 0 && ` (${duplicateGroups.length})`}
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Tab: All Receipts ────────────────────────────────── */}
@@ -734,7 +810,7 @@ const Matching = () => {
                   {allReceipts.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
                       </TableCell>
                       <TableCell>
                         <ExtractedIndicator receipt={r} />
@@ -798,24 +874,7 @@ const Matching = () => {
                       <div className="grid md:grid-cols-2 gap-4">
                         {/* Left: receipt info + thumbnail */}
                         <div className="space-y-2">
-                          {r.photo_url && (
-                            <div className="mb-2">
-                              <img
-                                src={r.photo_url}
-                                alt="Receipt"
-                                className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
-                                onClick={() => setLightboxUrl(r.photo_url)}
-                              />
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
-                                onClick={() => setLightboxUrl(r.photo_url)}
-                              >
-                                <ExternalLink className="h-3 w-3" /> View Receipt
-                              </Button>
-                            </div>
-                          )}
+                          <ReviewCardThumb storagePath={r.storage_path} onOpen={setLightboxUrl} />
                           <div className="flex items-center gap-2">
                             <Image className="h-4 w-4 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">Receipt</span>
@@ -949,7 +1008,7 @@ const Matching = () => {
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
                           <TableCell>
-                            <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                            <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
                           </TableCell>
                           <TableCell>
                             <ExtractedIndicator receipt={r} />
@@ -1063,7 +1122,7 @@ const Matching = () => {
                   {matchedReceipts.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb url={r.photo_url} onClick={setLightboxUrl} />
+                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
                       </TableCell>
                       <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
@@ -1096,6 +1155,160 @@ const Matching = () => {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ── Tab 5: Duplicates ────────────────────────────────── */}
+        <TabsContent value="duplicates">
+          {duplicatesLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-32 rounded-lg" />
+              ))}
+            </div>
+          ) : duplicateGroups.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
+                <CheckCircle className="h-10 w-10" />
+                <p className="text-sm">No suspected duplicates found.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md border border-orange-400/40 bg-orange-50/50 dark:bg-orange-950/20 p-3 text-sm text-muted-foreground flex items-start gap-2">
+                <Copy className="h-4 w-4 mt-0.5 shrink-0 text-orange-500" />
+                <span>
+                  These receipts share the same amount, date, and/or vendor and may have been submitted twice. Review each pair and confirm the duplicate or keep both.
+                </span>
+              </div>
+
+              {duplicateGroups.map((group, idx) => (
+                <Card key={idx} className="border-orange-400/30">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge
+                        variant="secondary"
+                        className={
+                          group.confidence === "high"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-warning/15 text-warning"
+                        }
+                      >
+                        {group.confidence === "high"
+                          ? "High confidence duplicate"
+                          : "Possible duplicate"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {group.matchReasons.join(" · ")}
+                      </span>
+                    </div>
+
+                    <Separator />
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {/* Original */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-accent">
+                          Original (keep)
+                        </p>
+                        <div className="flex items-start gap-3">
+                          <ReceiptThumb
+                            storagePath={group.original.storage_path}
+                            onClick={setLightboxUrl}
+                            size={48}
+                          />
+                          <div className="text-sm space-y-0.5">
+                            <p className="font-medium">
+                              {group.original.vendor_confirmed ??
+                                group.original.vendor_extracted ??
+                                "—"}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {group.original.amount_confirmed != null ||
+                              group.original.amount_extracted != null
+                                ? `$${Number(
+                                    group.original.amount_confirmed ??
+                                      group.original.amount_extracted
+                                  ).toFixed(2)}`
+                                : "—"}{" "}
+                              ·{" "}
+                              {group.original.date_confirmed ??
+                                group.original.date_extracted ??
+                                "—"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.original.employee?.full_name ?? "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Suspected duplicate */}
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium text-destructive">
+                          Suspected Duplicate (remove?)
+                        </p>
+                        <div className="flex items-start gap-3">
+                          <ReceiptThumb
+                            storagePath={group.duplicate.storage_path}
+                            onClick={setLightboxUrl}
+                            size={48}
+                          />
+                          <div className="text-sm space-y-0.5">
+                            <p className="font-medium">
+                              {group.duplicate.vendor_confirmed ??
+                                group.duplicate.vendor_extracted ??
+                                "—"}
+                            </p>
+                            <p className="text-muted-foreground">
+                              {group.duplicate.amount_confirmed != null ||
+                              group.duplicate.amount_extracted != null
+                                ? `$${Number(
+                                    group.duplicate.amount_confirmed ??
+                                      group.duplicate.amount_extracted
+                                  ).toFixed(2)}`
+                                : "—"}{" "}
+                              ·{" "}
+                              {group.duplicate.date_confirmed ??
+                                group.duplicate.date_extracted ??
+                                "—"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {group.duplicate.employee?.full_name ?? "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {!isClosed && (
+                      <div className="flex gap-2 pt-1">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="text-xs h-7"
+                          onClick={() =>
+                            confirmDuplicate(group.duplicate.id, group.original.id)
+                          }
+                        >
+                          <Copy className="h-3 w-3 mr-1" /> Confirm Duplicate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-7"
+                          onClick={() =>
+                            dismissDuplicate(group.duplicate.id, group.original.id)
+                          }
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" /> Keep Both
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>

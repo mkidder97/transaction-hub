@@ -184,6 +184,8 @@ export type Database = {
           created_at: string
           date_confirmed: string | null
           date_extracted: string | null
+          duplicate_of_id: string | null
+          duplicate_status: string | null
           flag_reason: string | null
           id: string
           match_confidence: number | null
@@ -211,6 +213,8 @@ export type Database = {
           created_at?: string
           date_confirmed?: string | null
           date_extracted?: string | null
+          duplicate_of_id?: string | null
+          duplicate_status?: string | null
           flag_reason?: string | null
           id?: string
           match_confidence?: number | null
@@ -238,6 +242,8 @@ export type Database = {
           created_at?: string
           date_confirmed?: string | null
           date_extracted?: string | null
+          duplicate_of_id?: string | null
+          duplicate_status?: string | null
           flag_reason?: string | null
           id?: string
           match_confidence?: number | null
@@ -262,6 +268,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receipts_duplicate_of_id_fkey"
+            columns: ["duplicate_of_id"]
+            isOneToOne: false
+            referencedRelation: "receipts"
             referencedColumns: ["id"]
           },
           {

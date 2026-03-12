@@ -1793,28 +1793,31 @@ const Matching = () => {
       </Dialog>
 
       {/* ── Image Lightbox ────────────────────────────────────── */}
-      <Dialog open={!!lightboxUrl} onOpenChange={(open) => { if (!open) closeLightbox(); }}>
-        <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
+      <Dialog open={lightboxOpen} onOpenChange={(open) => { if (!open) closeLightbox(); }}>
+        <DialogContent className="max-w-4xl p-2" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Receipt Preview</DialogTitle>
-          {lightboxIsPdf ? (
-            <object data={lightboxUrl ?? ""} type="application/pdf" className="w-full rounded-md" style={{ height: "80vh" }}>
-              <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-                <FileText className="h-8 w-8" />
-                <p className="text-sm">Unable to display PDF inline</p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => window.open(lightboxUrl ?? "", "_blank")}>
-                    <ExternalLink className="h-4 w-4 mr-1" /> Open PDF
-                  </Button>
-                  <Button size="sm" variant="outline" asChild>
-                    <a href={lightboxUrl ?? ""} download>
-                      <Download className="h-4 w-4 mr-1" /> Download
-                    </a>
-                  </Button>
-                </div>
-              </div>
-            </object>
+          {lightboxLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : lightboxError ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+              <AlertTriangle className="h-8 w-8" />
+              <p className="text-sm">{lightboxError}</p>
+            </div>
+          ) : lightboxIsPdf ? (
+            <iframe
+              src={lightboxUrl ?? ""}
+              className="w-full rounded-md"
+              style={{ height: "80vh" }}
+              title="Receipt PDF"
+            />
           ) : (
-            <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+            <img
+              src={lightboxUrl ?? ""}
+              alt="Receipt"
+              className="w-full h-auto rounded-md max-h-[80vh] object-contain"
+            />
           )}
         </DialogContent>
       </Dialog>

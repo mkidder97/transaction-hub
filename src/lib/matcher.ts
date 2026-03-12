@@ -180,7 +180,7 @@ export async function runMatchingForPeriod(
     .from("receipts")
     .select("id")
     .eq("statement_period_id", periodId)
-    .eq("match_status", "unmatched");
+    .in("match_status", ["unmatched", "needs_review"]);
 
   if (!receipts || receipts.length === 0)
     return { matched: 0, needs_review: 0, skipped: 0 };

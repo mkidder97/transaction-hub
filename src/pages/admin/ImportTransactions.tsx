@@ -206,12 +206,41 @@ const ImportTransactions = () => {
         user_id: r.card_last_four ? cardUserMap[r.card_last_four.replace(/\D/g, "").slice(-4)] ?? null : null,
       }));
 
-      const { data: insertedTxs, error: txErr } = await supabase.from("transactions").insert(txRows).select("id, user_id");
-      if (txErr) throw txErr;
+      // -- Deduplication: check existing transactions for same date+amount+card --
+      const dates = txRows.map(r => r.transaction_date).filter(Boolean) as string[];
+      const minDate = dates.length > 0 ? dates.reduce((a, b) => (a < b ? a : b)) : null;
+      const maxDate = dates.length > 0 ? dates.reduce((a, b) => (a > b ? a : b)) : null;
+      const cardValues = [...new Set(txRows.map(r => r.card_last_four).filter(Boolean))] as string[];
+
+      let existingKeys = new Set<string>();
+      if (minDate && maxDate && cardValues.length > 0) {
+        const { data: existing } = await supabase
+          .from("transactions")
+          .select("transaction_date, amount, card_last_four")
+          .in("card_last_four", cardValues)
+          .gte("transaction_date", minDate)
+          .lte("transaction_date", maxDate);
+        existingKeys = new Set(
+          (existing ?? []).map(r => `${r.transaction_date}|${r.amount}|${r.card_last_four}`)
+        );
+      }
+
+      const toInsert = txRows.filter(
+        r => !existingKeys.has(`${r.transaction_date}|${r.amount}|${r.card_last_four}`)
+      );
+      const skippedCount = txRows.length - toInsert.length;
+
+      let insertedTxs: { id: string; user_id: string | null }[] | null = null;
+
+      if (toInsert.length > 0) {
+        const { data, error: txErr } = await supabase.from("transactions").insert(toInsert).select("id, user_id");
+        if (txErr) throw txErr;
+        insertedTxs = data;
+      }
 
       await supabase
         .from("import_batches")
-        .update({ status: "complete", imported_rows: sourceRows.length, failed_rows: 0 })
+        .update({ status: "complete", imported_rows: toInsert.length, failed_rows: 0 })
         .eq("id", batch.id);
 
       // Auto-match: find unmatched receipts for each user and try to match
@@ -255,7 +284,12 @@ const ImportTransactions = () => {
         }
       }
 
-      toast.success(`${sourceRows.length} transactions imported successfully!`);
+      if (toInsert.length > 0) {
+        toast.success(`${toInsert.length} transaction(s) imported successfully!`);
+      }
+      if (skippedCount > 0) {
+        toast.warning(`${skippedCount} duplicate transaction(s) skipped — they already exist in this period.`);
+      }
       fetchBatches();
 
       if (source === "screenshot") {

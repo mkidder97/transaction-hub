@@ -177,6 +177,22 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
     headStyles: { fillColor: [99, 102, 241] },
   });
 
-  const filename = `reconciliation-${period.name.replace(/\s+/g, "-").toLowerCase()}.pdf`;
-  doc.save(filename);
+  // Open in new tab — works in both sandboxed preview and production.
+  // Browser's built-in PDF viewer lets the user save via Cmd+S or right-click > Save.
+  const blob = doc.output("blob");
+  const blobUrl = URL.createObjectURL(blob);
+  const newTab = window.open(blobUrl, "_blank");
+
+  // Fallback: if popup was blocked, trigger a direct download instead
+  if (!newTab) {
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `reconciliation-${period.name.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // Revoke after a delay to ensure browser has finished reading the blob
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 30000);
 }

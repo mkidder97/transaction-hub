@@ -451,7 +451,7 @@ const Matching = () => {
     setOrphanLoading(true);
     const { data } = await supabase
       .from("transactions")
-      .select("id, vendor_raw, vendor_normalized, amount, transaction_date, card_last_four, match_status, user:profiles!transactions_user_id_fkey(full_name)")
+      .select("id, user_id, vendor_raw, vendor_normalized, amount, transaction_date, card_last_four, match_status, user:profiles!transactions_user_id_fkey(full_name)")
       .eq("statement_period_id", pid)
       .eq("match_status", "unmatched")
       .order("transaction_date", { ascending: false });

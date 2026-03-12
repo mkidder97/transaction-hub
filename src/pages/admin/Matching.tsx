@@ -1395,7 +1395,7 @@ const Matching = () => {
                             <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
                               <Flag className="h-3 w-3 mr-1" /> No Receipt
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => generatePlaceholderReceipt({ ...tx, employeeName: tx.user?.full_name ?? null, periodName: selectedPeriod?.name ?? null })}>
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
                               <FileDown className="h-3 w-3 mr-1" /> Placeholder
                             </Button>
                           </div>

@@ -42,6 +42,14 @@ function vendorSimilarity(a: string | null, b: string | null): number {
   return (2 * overlap) / (bg1.size + bg2.size);
 }
 
+function dateDiffDays(a: string | null, b: string | null): number {
+  if (!a || !b) return Infinity;
+  const msA = Date.parse(a);
+  const msB = Date.parse(b);
+  if (isNaN(msA) || isNaN(msB)) return Infinity;
+  return Math.abs(msA - msB) / 86_400_000;
+}
+
 function getVendor(r: DuplicateReceipt) {
   return r.vendor_confirmed ?? r.vendor_extracted;
 }
@@ -112,13 +120,17 @@ export async function detectDuplicatesForPeriod(
       if (sameEmployee && matchReasons.length > 0)
         matchReasons.push("Same employee");
 
+      const DATE_PROXIMITY_DAYS = 3;
+      const daysApart = dateDiffDays(aDate, bDate);
+      const datesProximate = daysApart <= DATE_PROXIMITY_DAYS;
+
       let confidence: "high" | "medium" | null = null;
 
       if (amountMatch && dateMatch && vendorMatch) {
         confidence = "high";
       } else if (amountMatch && dateMatch && sameEmployee) {
         confidence = "medium";
-      } else if (amountMatch && vendorMatch && sameEmployee) {
+      } else if (amountMatch && vendorMatch && sameEmployee && datesProximate) {
         confidence = "medium";
       }
 

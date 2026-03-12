@@ -1211,6 +1211,9 @@ const Matching = () => {
                               </Button>
                             )}
                           </TableCell>
+                          <TableCell>
+                            <ReceiptActionsMenu receiptId={r.id} status={r.status} />
+                          </TableCell>
                         </TableRow>
                       );
                     })}

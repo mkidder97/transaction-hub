@@ -624,6 +624,62 @@ const Matching = () => {
     refreshAll(periodId);
   };
 
+  /* ── Placeholder handler ────────────────────────────────────── */
+  const confirmPlaceholder = async () => {
+    if (!placeholderTx || !periodId) return;
+    setPlaceholderLoading(true);
+    try {
+      const blob = await buildPlaceholderBlob({
+        id: placeholderTx.id,
+        vendor_raw: placeholderTx.vendor_raw,
+        vendor_normalized: placeholderTx.vendor_normalized,
+        amount: placeholderTx.amount,
+        transaction_date: placeholderTx.transaction_date,
+        card_last_four: placeholderTx.card_last_four,
+        employeeName: placeholderTx.user?.full_name ?? null,
+        periodName: selectedPeriod?.name ?? null,
+      });
+
+      const storagePath = `placeholders/${placeholderTx.id}.pdf`;
+      const { error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: newReceipt, error: receiptError } = await supabase
+        .from("receipts")
+        .insert({
+          user_id: placeholderTx.user_id,
+          statement_period_id: periodId,
+          storage_path: storagePath,
+          match_status: "matched",
+          match_confidence: 1,
+          transaction_id: placeholderTx.id,
+          vendor_confirmed: placeholderTx.vendor_normalized ?? placeholderTx.vendor_raw,
+          amount_confirmed: placeholderTx.amount,
+          date_confirmed: placeholderTx.transaction_date,
+          status: "approved",
+          is_placeholder: true,
+        } as any)
+        .select("id")
+        .single();
+      if (receiptError) throw receiptError;
+
+      await supabase
+        .from("transactions")
+        .update({ receipt_id: newReceipt.id, match_status: "matched", match_confidence: 1 })
+        .eq("id", placeholderTx.id);
+
+      toast.success("Placeholder filed — transaction moved to Matched");
+      setPlaceholderTx(null);
+      refreshAll(periodId);
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to create placeholder");
+    } finally {
+      setPlaceholderLoading(false);
+    }
+  };
+
   /* ── Approve / Flag receipt ─────────────────────────────────── */
   const handleApprove = async (receiptId: string) => {
     const { error } = await supabase

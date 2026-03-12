@@ -1155,7 +1155,8 @@ const Matching = () => {
 
       {/* ── Image Lightbox ────────────────────────────────────── */}
       <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
-        <DialogContent className="max-w-3xl p-2">
+        <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
+          <DialogTitle className="sr-only">Receipt Image</DialogTitle>
           <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
         </DialogContent>
       </Dialog>

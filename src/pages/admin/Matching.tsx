@@ -68,6 +68,7 @@ import {
   ExternalLink,
   Copy,
   FileDown,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";

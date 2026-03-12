@@ -11,19 +11,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -60,6 +47,7 @@ import {
   CreditCard,
   CheckCircle,
   XCircle,
+  X,
   Search,
   Unlink,
   Flag,
@@ -301,38 +289,28 @@ const Matching = () => {
   // Inline filter bar state
   const [filterVendor, setFilterVendor] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
-  const [vendorOptions, setVendorOptions] = useState<string[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<{ id: string; name: string }[]>([]);
-  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
 
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
-    // Fetch periods, vendors, and employees in parallel
+    // Fetch periods and employees in parallel
     Promise.all([
       supabase
         .from("statement_periods")
         .select("id, name, is_current, is_closed")
         .order("start_date", { ascending: false }),
       supabase
-        .from("known_vendors")
-        .select("canonical_name")
-        .order("canonical_name"),
-      supabase
         .from("profiles")
         .select("id, full_name")
         .eq("is_active", true)
         .order("full_name"),
-    ]).then(([periodsRes, vendorsRes, employeesRes]) => {
+    ]).then(([periodsRes, employeesRes]) => {
       if (periodsRes.data) {
         setPeriods(periodsRes.data as Period[]);
         const current = periodsRes.data.find((p) => p.is_current);
         if (current) setPeriodId(current.id);
-      }
-      if (vendorsRes.data) {
-        const unique = [...new Set(vendorsRes.data.map((v) => v.canonical_name))];
-        setVendorOptions(unique);
       }
       if (employeesRes.data) {
         setEmployeeOptions(
@@ -847,44 +825,24 @@ const Matching = () => {
         </div>
         <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
-        {/* Vendor autocomplete */}
-        <Popover open={vendorDropdownOpen} onOpenChange={setVendorDropdownOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 justify-start gap-2 min-w-[180px] max-w-xs font-normal text-sm"
+        {/* Vendor search */}
+        <div className="relative min-w-[180px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by vendor…"
+            value={filterVendor}
+            onChange={(e) => setFilterVendor(e.target.value)}
+            className="h-8 pl-8 pr-8 text-sm"
+          />
+          {filterVendor && (
+            <button
+              onClick={() => setFilterVendor("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {filterVendor ? (
-                <span className="truncate">{filterVendor}</span>
-              ) : (
-                <span className="text-muted-foreground">Filter by vendor…</span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[220px] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search vendors…" />
-              <CommandList>
-                <CommandEmpty>No vendors found.</CommandEmpty>
-                <CommandGroup>
-                  {vendorOptions.map((v) => (
-                    <CommandItem
-                      key={v}
-                      onSelect={() => {
-                        setFilterVendor(v);
-                        setVendorDropdownOpen(false);
-                      }}
-                    >
-                      {v}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
 
         {/* Employee dropdown */}
         {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (

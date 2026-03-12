@@ -175,11 +175,13 @@ function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {hasData ? (
-            <CheckCircle className="h-4 w-4 text-accent" />
-          ) : (
-            <AlertTriangle className="h-4 w-4 text-warning" />
-          )}
+          <span className="inline-flex">
+            {hasData ? (
+              <CheckCircle className="h-4 w-4 text-accent" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 text-warning" />
+            )}
+          </span>
         </TooltipTrigger>
         <TooltipContent>
           {hasData ? "AI extraction complete" : "AI extraction pending"}

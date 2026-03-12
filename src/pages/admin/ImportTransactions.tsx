@@ -649,6 +649,7 @@ const ImportTransactions = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10" />
                   <TableHead>Date</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Filename</TableHead>
@@ -658,46 +659,118 @@ const ImportTransactions = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batches.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {new Date(b.created_at).toLocaleDateString()}{" "}
-                      <span className="text-muted-foreground text-xs">
-                        {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {b.source === "screenshot" ? "Screenshot" : "CSV"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm truncate max-w-[160px]">
-                      {b.filename ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {b.importer?.full_name ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {b.imported_rows ?? 0} / {b.total_rows ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] px-1.5 py-0 ${
-                          b.status === "complete"
-                            ? "bg-accent/15 text-accent"
-                            : b.status === "processing"
-                            ? "bg-warning/15 text-warning"
-                            : b.status === "failed"
-                            ? "bg-destructive/15 text-destructive"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {b.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {batches.map((b) => {
+                  const hasFiles = b.file_paths && b.file_paths.length > 0;
+                  const isExpanded = expandedBatch === b.id;
+                  return (
+                    <>
+                      <TableRow key={b.id} className={hasFiles ? "cursor-pointer hover:bg-muted/50" : ""} onClick={() => {
+                        if (!hasFiles) return;
+                        if (isExpanded) {
+                          setExpandedBatch(null);
+                        } else {
+                          setExpandedBatch(b.id);
+                          // Load signed URLs if not cached
+                          if (!batchFileUrls[b.id]) {
+                            Promise.all(
+                              (b.file_paths ?? []).map(async (p) => {
+                                const { data } = await supabase.storage
+                                  .from("transaction-screenshots")
+                                  .createSignedUrl(p, 3600);
+                                return data?.signedUrl ?? null;
+                              })
+                            ).then((urls) => {
+                              setBatchFileUrls((prev) => ({
+                                ...prev,
+                                [b.id]: urls.filter(Boolean) as string[],
+                              }));
+                            });
+                          }
+                        }
+                      }}>
+                        <TableCell className="w-10 px-2">
+                          {hasFiles ? (
+                            isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {new Date(b.created_at).toLocaleDateString()}{" "}
+                          <span className="text-muted-foreground text-xs">
+                            {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {b.source === "screenshot" ? "Screenshot" : "CSV"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm truncate max-w-[160px]">
+                          {b.filename ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {b.importer?.full_name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {b.imported_rows ?? 0} / {b.total_rows ?? 0}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] px-1.5 py-0 ${
+                              b.status === "complete"
+                                ? "bg-accent/15 text-accent"
+                                : b.status === "processing"
+                                ? "bg-warning/15 text-warning"
+                                : b.status === "failed"
+                                ? "bg-destructive/15 text-destructive"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {b.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow key={`${b.id}-files`}>
+                          <TableCell colSpan={7} className="bg-muted/30 p-4">
+                            {batchFileUrls[b.id] ? (
+                              <div className="flex gap-3 flex-wrap">
+                                {batchFileUrls[b.id].map((url, i) => {
+                                  const path = b.file_paths?.[i] ?? "";
+                                  const isCsv = path.endsWith(".csv") || b.source === "csv";
+                                  return isCsv ? (
+                                    <a
+                                      key={i}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border bg-background text-sm hover:bg-muted transition-colors"
+                                    >
+                                      <Upload className="h-3.5 w-3.5" />
+                                      {b.filename ?? `File ${i + 1}`}
+                                    </a>
+                                  ) : (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                      <img
+                                        src={url}
+                                        alt={`Import file ${i + 1}`}
+                                        className="h-32 w-auto rounded-md border object-cover hover:opacity-80 transition-opacity"
+                                      />
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" /> Loading files…
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

@@ -295,30 +295,22 @@ const Matching = () => {
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
-    // Fetch periods, vendors, and employees in parallel
+    // Fetch periods and employees in parallel
     Promise.all([
       supabase
         .from("statement_periods")
         .select("id, name, is_current, is_closed")
         .order("start_date", { ascending: false }),
       supabase
-        .from("known_vendors")
-        .select("canonical_name")
-        .order("canonical_name"),
-      supabase
         .from("profiles")
         .select("id, full_name")
         .eq("is_active", true)
         .order("full_name"),
-    ]).then(([periodsRes, vendorsRes, employeesRes]) => {
+    ]).then(([periodsRes, employeesRes]) => {
       if (periodsRes.data) {
         setPeriods(periodsRes.data as Period[]);
         const current = periodsRes.data.find((p) => p.is_current);
         if (current) setPeriodId(current.id);
-      }
-      if (vendorsRes.data) {
-        const unique = [...new Set(vendorsRes.data.map((v) => v.canonical_name))];
-        setVendorOptions(unique);
       }
       if (employeesRes.data) {
         setEmployeeOptions(

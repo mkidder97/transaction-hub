@@ -928,7 +928,7 @@ const Matching = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {reviewReceipts.map((r) => {
+              {filteredReview.map((r) => {
                 const suggestions = (r.match_suggestions ?? []) as MatchSuggestion[];
                 const legacyTx = suggestions.length === 0 && r.transaction_id ? legacyTxCache[r.transaction_id] : null;
 

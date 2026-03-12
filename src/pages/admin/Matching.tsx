@@ -592,6 +592,68 @@ const Matching = () => {
     refreshAll(periodId);
   };
 
+  /* ── Approve / Flag receipt ─────────────────────────────────── */
+  const handleApprove = async (receiptId: string) => {
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "approved", reviewed_at: new Date().toISOString() })
+      .eq("id", receiptId);
+    if (error) {
+      toast.error("Failed to approve receipt");
+      return;
+    }
+    toast.success("Receipt approved");
+    refreshAll(periodId);
+  };
+
+  const handleFlag = async () => {
+    if (!flagReceiptId) return;
+    setFlagSubmitting(true);
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "flagged", flag_reason: flagReason, reviewed_at: new Date().toISOString() })
+      .eq("id", flagReceiptId);
+    setFlagSubmitting(false);
+    if (error) {
+      toast.error("Failed to flag receipt");
+      return;
+    }
+    toast.success("Receipt flagged");
+    setFlagReceiptId(null);
+    setFlagReason("");
+    refreshAll(periodId);
+  };
+
+  /* ── Receipt actions dropdown ───────────────────────────────── */
+  const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
+    if (isClosed) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => handleApprove(receiptId)}
+            disabled={status === "approved"}
+          >
+            <CheckCircle className="h-4 w-4 mr-2 text-accent" />
+            Approve
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => { setFlagReceiptId(receiptId); setFlagReason(""); }}
+            disabled={status === "flagged"}
+          >
+            <Flag className="h-4 w-4 mr-2 text-destructive" />
+            Flag
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   /* ── Search modal helpers ───────────────────────────────────── */
   const openSearchTx = (receiptId: string) => {
     const receipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(r => r.id === receiptId);

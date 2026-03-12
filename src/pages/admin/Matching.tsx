@@ -970,6 +970,20 @@ const Matching = () => {
             Clear
           </Button>
         )}
+
+        {/* Spacer + Approve All */}
+        <div className="ml-auto">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs gap-1.5"
+            disabled={approvingAll || selectedPeriod?.is_closed}
+            onClick={handleApproveAll}
+          >
+            {approvingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+            Approve All Matched
+          </Button>
+        </div>
       </div>
 
       {/* Tab content (no visible tab strip) */}

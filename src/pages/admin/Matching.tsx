@@ -1036,7 +1036,7 @@ const Matching = () => {
         <TabsContent value="unmatched">
           {unmatchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : unmatchedReceipts.length === 0 ? (
+          ) : filteredUnmatched.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />

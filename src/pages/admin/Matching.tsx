@@ -1645,7 +1645,7 @@ const Matching = () => {
                         <div className="flex items-start gap-3">
                           <ReceiptThumb
                             storagePath={group.duplicate.storage_path}
-                            onClick={openLightbox}
+                            onClickPath={openLightbox}
                             size={48}
                           />
                           <div className="text-sm space-y-0.5">

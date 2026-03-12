@@ -48,6 +48,7 @@ import {
 import {
   Loader2,
   MoreHorizontal,
+  Zap,
   FileCheck,
   AlertTriangle,
   FileX,

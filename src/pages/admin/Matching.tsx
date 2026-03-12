@@ -833,44 +833,24 @@ const Matching = () => {
         </div>
         <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
-        {/* Vendor autocomplete */}
-        <Popover open={vendorDropdownOpen} onOpenChange={setVendorDropdownOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 justify-start gap-2 min-w-[180px] max-w-xs font-normal text-sm"
+        {/* Vendor search */}
+        <div className="relative min-w-[180px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by vendor…"
+            value={filterVendor}
+            onChange={(e) => setFilterVendor(e.target.value)}
+            className="h-8 pl-8 pr-8 text-sm"
+          />
+          {filterVendor && (
+            <button
+              onClick={() => setFilterVendor("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              {filterVendor ? (
-                <span className="truncate">{filterVendor}</span>
-              ) : (
-                <span className="text-muted-foreground">Filter by vendor…</span>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[220px] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search vendors…" />
-              <CommandList>
-                <CommandEmpty>No vendors found.</CommandEmpty>
-                <CommandGroup>
-                  {vendorOptions.map((v) => (
-                    <CommandItem
-                      key={v}
-                      onSelect={() => {
-                        setFilterVendor(v);
-                        setVendorDropdownOpen(false);
-                      }}
-                    >
-                      {v}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
 
         {/* Employee dropdown */}
         {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (

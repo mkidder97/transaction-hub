@@ -154,6 +154,7 @@ const ImportTransactions = () => {
 
     setOcrProgress(1);
     setRows(allRows);
+    setScreenshotPaths(allPaths);
     if (allRows.length === 0 && failCount === 0) {
       toast.error("No transactions detected — try clearer screenshots.");
     } else if (allRows.length > 0) {

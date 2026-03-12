@@ -302,53 +302,21 @@ const Matching = () => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Lightbox
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxLoading, setLightboxLoading] = useState(false);
-  const [lightboxObjectUrl, setLightboxObjectUrl] = useState<string | null>(null);
-  const [lightboxMime, setLightboxMime] = useState<string>("");
-  const [lightboxError, setLightboxError] = useState<string | null>(null);
-  const lightboxObjectUrlRef = useRef<string | null>(null);
-
-  const cleanupLightbox = useCallback(() => {
-    if (lightboxObjectUrlRef.current) {
-      URL.revokeObjectURL(lightboxObjectUrlRef.current);
-      lightboxObjectUrlRef.current = null;
-    }
-  }, []);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
 
   const openLightbox = useCallback(async (storagePath: string) => {
-    setLightboxOpen(true);
-    setLightboxLoading(true);
-    setLightboxError(null);
-    setLightboxObjectUrl(null);
-    setLightboxMime("");
-    cleanupLightbox();
-
-    try {
-      const signedUrl = await getSignedReceiptUrl(storagePath);
-      if (!signedUrl) throw new Error("Could not get signed URL");
-
-      const resp = await fetch(signedUrl);
-      if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
-      const blob = await resp.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      lightboxObjectUrlRef.current = objectUrl;
-      setLightboxObjectUrl(objectUrl);
-      setLightboxMime(blob.type || (storagePath.endsWith(".pdf") ? "application/pdf" : "image/jpeg"));
-    } catch (err: any) {
-      setLightboxError(err.message ?? "Failed to load preview");
-    } finally {
-      setLightboxLoading(false);
-    }
-  }, [cleanupLightbox]);
+    const isPdf = storagePath.toLowerCase().endsWith(".pdf");
+    setLightboxIsPdf(isPdf);
+    setLightboxUrl(null);
+    const url = await getSignedReceiptUrl(storagePath);
+    setLightboxUrl(url);
+  }, []);
 
   const closeLightbox = useCallback(() => {
-    setLightboxOpen(false);
-    cleanupLightbox();
-    setLightboxObjectUrl(null);
-    setLightboxMime("");
-    setLightboxError(null);
-  }, [cleanupLightbox]);
+    setLightboxUrl(null);
+    setLightboxIsPdf(false);
+  }, []);
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);

@@ -833,26 +833,64 @@ const Matching = () => {
           <span>{statCards.find((s) => s.tab === activeTab)?.label}</span>
         </div>
         <Separator orientation="vertical" className="h-6 hidden sm:block" />
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Filter by vendor…"
-            className="pl-8 h-8 text-sm"
-            value={filterVendor}
-            onChange={(e) => setFilterVendor(e.target.value)}
-          />
-        </div>
+
+        {/* Vendor autocomplete */}
+        <Popover open={vendorDropdownOpen} onOpenChange={setVendorDropdownOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 justify-start gap-2 min-w-[180px] max-w-xs font-normal text-sm"
+            >
+              <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              {filterVendor ? (
+                <span className="truncate">{filterVendor}</span>
+              ) : (
+                <span className="text-muted-foreground">Filter by vendor…</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[220px] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search vendors…" />
+              <CommandList>
+                <CommandEmpty>No vendors found.</CommandEmpty>
+                <CommandGroup>
+                  {vendorOptions.map((v) => (
+                    <CommandItem
+                      key={v}
+                      onSelect={() => {
+                        setFilterVendor(v);
+                        setVendorDropdownOpen(false);
+                      }}
+                    >
+                      {v}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+
+        {/* Employee dropdown */}
         {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (
-          <div className="relative min-w-[140px] max-w-xs">
-            <Input
-              placeholder="Filter by employee…"
-              className="h-8 text-sm"
-              value={filterEmployee}
-              onChange={(e) => setFilterEmployee(e.target.value)}
-            />
-          </div>
+          <Select value={filterEmployee} onValueChange={setFilterEmployee}>
+            <SelectTrigger className="h-8 text-sm w-[180px]">
+              <SelectValue placeholder="All employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All employees</SelectItem>
+              {employeeOptions.map((e) => (
+                <SelectItem key={e.id} value={e.name}>
+                  {e.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
-        {(filterVendor || filterEmployee) && (
+
+        {(filterVendor || (filterEmployee && filterEmployee !== "all")) && (
           <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterVendor(""); setFilterEmployee(""); }}>
             Clear
           </Button>

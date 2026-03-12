@@ -608,6 +608,32 @@ const Matching = () => {
     refreshAll(periodId);
   };
 
+  /* ── Approve All matched receipts ───────────────────────────── */
+  const [approvingAll, setApprovingAll] = useState(false);
+  const handleApproveAll = async () => {
+    const toApprove = allReceipts.filter(
+      (r) =>
+        ["auto_matched", "manual_match", "matched"].includes(r.match_status) &&
+        r.status !== "approved"
+    );
+    if (toApprove.length === 0) {
+      toast.info("No matched receipts to approve");
+      return;
+    }
+    setApprovingAll(true);
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "approved", reviewed_at: new Date().toISOString() })
+      .in("id", toApprove.map((r) => r.id));
+    setApprovingAll(false);
+    if (error) {
+      toast.error("Failed to approve receipts");
+      return;
+    }
+    toast.success(`${toApprove.length} receipt${toApprove.length === 1 ? "" : "s"} approved`);
+    refreshAll(periodId);
+  };
+
   const handleFlag = async () => {
     if (!flagReceiptId) return;
     setFlagSubmitting(true);

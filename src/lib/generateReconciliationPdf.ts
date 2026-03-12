@@ -1,12 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// Re-declare autoTable on jsPDF for TypeScript
-declare module "jspdf" {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
 import { supabase } from "@/integrations/supabase/client";
 
 export async function generateReconciliationPdf(periodId: string): Promise<void> {

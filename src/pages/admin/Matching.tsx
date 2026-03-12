@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -170,18 +171,18 @@ function scoreBadgeClass(score: number): string {
 /* ── Receipt thumbnail helper (signed URL) ───────────────────────── */
 function ReceiptThumb({
   storagePath,
-  onClick,
+  onClickPath,
   size = 40,
   isPlaceholder = false,
 }: {
   storagePath: string | null;
-  onClick: (url: string, isPdf?: boolean) => void;
+  onClickPath: (path: string) => void;
   size?: number;
   isPlaceholder?: boolean;
 }) {
   const url = useSignedUrl(storagePath);
 
-  if (!storagePath || !url) {
+  if (!storagePath) {
     return (
       <div
         className="rounded bg-muted flex items-center justify-center"
@@ -197,10 +198,21 @@ function ReceiptThumb({
       <div
         className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
         style={{ width: size, height: size }}
-        onClick={() => onClick(url, true)}
+        onClick={() => onClickPath(storagePath)}
         title="View placeholder PDF"
       >
         <FileText className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div
+        className="rounded bg-muted flex items-center justify-center"
+        style={{ width: size, height: size }}
+      >
+        <ImageOff className="h-4 w-4 text-muted-foreground" />
       </div>
     );
   }
@@ -211,7 +223,7 @@ function ReceiptThumb({
       alt="Receipt"
       className="rounded object-cover cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
       style={{ width: size, height: size }}
-      onClick={() => onClick(url, false)}
+      onClick={() => onClickPath(storagePath)}
     />
   );
 }
@@ -222,7 +234,7 @@ function ReviewCardThumb({
   onOpen,
 }: {
   storagePath: string | null;
-  onOpen: (url: string) => void;
+  onOpen: (path: string) => void;
 }) {
   const url = useSignedUrl(storagePath);
   if (!storagePath || !url) return null;
@@ -232,13 +244,13 @@ function ReviewCardThumb({
         src={url}
         alt="Receipt"
         className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
-        onClick={() => onOpen(url)}
+        onClick={() => onOpen(storagePath)}
       />
       <Button
         size="sm"
         variant="ghost"
         className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
-        onClick={() => onOpen(url)}
+        onClick={() => onOpen(storagePath)}
       >
         <ExternalLink className="h-3 w-3" /> View Receipt
       </Button>
@@ -290,13 +302,53 @@ const Matching = () => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Lightbox
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
+  const [lightboxObjectUrl, setLightboxObjectUrl] = useState<string | null>(null);
+  const [lightboxMime, setLightboxMime] = useState<string>("");
+  const [lightboxError, setLightboxError] = useState<string | null>(null);
+  const lightboxObjectUrlRef = useRef<string | null>(null);
 
-  const openLightbox = (url: string, isPdf = false) => {
-    setLightboxIsPdf(isPdf);
-    setLightboxUrl(url);
-  };
+  const cleanupLightbox = useCallback(() => {
+    if (lightboxObjectUrlRef.current) {
+      URL.revokeObjectURL(lightboxObjectUrlRef.current);
+      lightboxObjectUrlRef.current = null;
+    }
+  }, []);
+
+  const openLightbox = useCallback(async (storagePath: string) => {
+    setLightboxOpen(true);
+    setLightboxLoading(true);
+    setLightboxError(null);
+    setLightboxObjectUrl(null);
+    setLightboxMime("");
+    cleanupLightbox();
+
+    try {
+      const signedUrl = await getSignedReceiptUrl(storagePath);
+      if (!signedUrl) throw new Error("Could not get signed URL");
+
+      const resp = await fetch(signedUrl);
+      if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      lightboxObjectUrlRef.current = objectUrl;
+      setLightboxObjectUrl(objectUrl);
+      setLightboxMime(blob.type || (storagePath.endsWith(".pdf") ? "application/pdf" : "image/jpeg"));
+    } catch (err: any) {
+      setLightboxError(err.message ?? "Failed to load preview");
+    } finally {
+      setLightboxLoading(false);
+    }
+  }, [cleanupLightbox]);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+    cleanupLightbox();
+    setLightboxObjectUrl(null);
+    setLightboxMime("");
+    setLightboxError(null);
+  }, [cleanupLightbox]);
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
@@ -1128,7 +1180,7 @@ const Matching = () => {
                   {filteredAll.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} isPlaceholder={r.is_placeholder ?? false} />
+                        <ReceiptThumb storagePath={r.storage_path} onClickPath={openLightbox} isPlaceholder={r.is_placeholder ?? false} />
                       </TableCell>
                       <TableCell>
                         <ExtractedIndicator receipt={r} />
@@ -1195,7 +1247,7 @@ const Matching = () => {
                       <div className="grid md:grid-cols-2 gap-4">
                         {/* Left: receipt info + thumbnail */}
                         <div className="space-y-2">
-                          <ReviewCardThumb storagePath={r.storage_path} onOpen={(url) => openLightbox(url)} />
+                          <ReviewCardThumb storagePath={r.storage_path} onOpen={(path) => openLightbox(path)} />
                           <div className="flex items-center gap-2">
                             <Image className="h-4 w-4 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">Receipt</span>
@@ -1336,7 +1388,7 @@ const Matching = () => {
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
                           <TableCell>
-                            <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} />
+                            <ReceiptThumb storagePath={r.storage_path} onClickPath={openLightbox} />
                           </TableCell>
                           <TableCell>
                             <ExtractedIndicator receipt={r} />
@@ -1458,7 +1510,7 @@ const Matching = () => {
                       <TableCell>
                         <ReceiptThumb
                           storagePath={r.storage_path}
-                          onClick={openLightbox}
+                          onClickPath={openLightbox}
                           isPlaceholder={r.is_placeholder ?? false}
                         />
                       </TableCell>
@@ -1556,7 +1608,7 @@ const Matching = () => {
                         <div className="flex items-start gap-3">
                           <ReceiptThumb
                             storagePath={group.original.storage_path}
-                            onClick={openLightbox}
+                            onClickPath={openLightbox}
                             size={48}
                           />
                           <div className="text-sm space-y-0.5">
@@ -1593,7 +1645,7 @@ const Matching = () => {
                         <div className="flex items-start gap-3">
                           <ReceiptThumb
                             storagePath={group.duplicate.storage_path}
-                            onClick={openLightbox}
+                            onClickPath={openLightbox}
                             size={48}
                           />
                           <div className="text-sm space-y-0.5">
@@ -1732,13 +1784,22 @@ const Matching = () => {
       </Dialog>
 
       {/* ── Image Lightbox ────────────────────────────────────── */}
-      <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
+      <Dialog open={lightboxOpen} onOpenChange={(open) => { if (!open) closeLightbox(); }}>
         <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Receipt Preview</DialogTitle>
-          {lightboxIsPdf ? (
-            <iframe src={lightboxUrl ?? ""} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
+          {lightboxLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : lightboxError ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+              <AlertTriangle className="h-8 w-8" />
+              <p className="text-sm">{lightboxError}</p>
+            </div>
+          ) : lightboxMime.startsWith("application/pdf") ? (
+            <iframe src={lightboxObjectUrl ?? ""} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
           ) : (
-            <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+            <img src={lightboxObjectUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
           )}
         </DialogContent>
       </Dialog>

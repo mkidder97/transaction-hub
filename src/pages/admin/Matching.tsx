@@ -336,7 +336,7 @@ const Matching = () => {
       matched: r.filter((x) => x.match_status === "auto_matched" || x.match_status === "manual_match" || x.match_status === "matched").length,
       autoMatched: r.filter((x) => x.match_status === "auto_matched").length,
       needsReview: r.filter((x) => x.match_status === "needs_review").length,
-      unmatched: r.filter((x) => x.match_status === "unmatched").length,
+      unmatched: r.filter((x: any) => x.match_status === "unmatched" && x.duplicate_status !== "confirmed_duplicate").length,
       txWithoutReceipt: t.filter((x) => x.match_status === "unmatched").length,
     });
     setStatsLoading(false);

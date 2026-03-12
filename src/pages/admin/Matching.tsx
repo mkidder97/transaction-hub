@@ -1067,7 +1067,7 @@ const Matching = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {unmatchedReceipts.map((r) => {
+                    {filteredUnmatched.map((r) => {
                       const missingExtraction = !r.vendor_extracted && !r.vendor_confirmed;
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>

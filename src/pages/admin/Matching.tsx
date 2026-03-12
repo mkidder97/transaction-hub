@@ -592,6 +592,13 @@ const Matching = () => {
     setSearchLoading(true);
 
     if (searchModal.type === "transaction") {
+      const sourceReceipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(
+        (r) => r.id === searchModal.sourceId,
+      );
+      const sourceDate = sourceReceipt
+        ? (sourceReceipt.date_confirmed ?? sourceReceipt.date_extracted)
+        : null;
+
       let q = supabase
         .from("transactions")
         .select("id, vendor_raw, vendor_normalized, amount, transaction_date")
@@ -599,6 +606,20 @@ const Matching = () => {
         .eq("match_status", "unmatched")
         .order("transaction_date", { ascending: false })
         .limit(20);
+
+      // Keep “Use Different” focused on likely matches when receipt date exists.
+      if (sourceDate) {
+        const base = new Date(`${sourceDate}T00:00:00Z`);
+        if (!Number.isNaN(base.getTime())) {
+          const min = new Date(base);
+          min.setUTCDate(base.getUTCDate() - 3);
+          const max = new Date(base);
+          max.setUTCDate(base.getUTCDate() + 3);
+          q = q
+            .gte("transaction_date", min.toISOString().slice(0, 10))
+            .lte("transaction_date", max.toISOString().slice(0, 10));
+        }
+      }
 
       if (searchVendor) q = q.or(`vendor_raw.ilike.%${searchVendor}%,vendor_normalized.ilike.%${searchVendor}%`);
       if (searchAmountMin) q = q.gte("amount", parseFloat(searchAmountMin));

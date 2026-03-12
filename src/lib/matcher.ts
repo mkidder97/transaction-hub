@@ -228,6 +228,16 @@ export async function runMatchingForPeriod(
 
       needs_review++;
     } else {
+      await supabase
+        .from("receipts")
+        .update({
+          match_status: "unmatched",
+          transaction_id: null,
+          match_confidence: null,
+          match_suggestions: null,
+        })
+        .eq("id", r.id);
+
       skipped++;
     }
   }

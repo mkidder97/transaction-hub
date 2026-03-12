@@ -323,12 +323,25 @@ const ImportTransactions = () => {
   }, [user]);
 
   // -- CSV handlers --
-  const handleCsv = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsv = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCsvFilename(file.name);
     setCsvMapped([]);
+
+    // Upload CSV to storage
+    const path = `csv/${uuidv4()}_${file.name}`;
+    const { error: upErr } = await supabase.storage
+      .from("transaction-screenshots")
+      .upload(path, file, { contentType: "text/csv", upsert: false });
+    if (upErr) {
+      console.error("CSV upload failed:", upErr);
+    } else {
+      setCsvStoragePath(path);
+    }
+
     const reader = new FileReader();
+    reader.onload = (ev) => {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);

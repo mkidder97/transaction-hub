@@ -135,6 +135,10 @@ export async function matchReceiptToTransactions(
     });
   }
 
+  if (scored.length === 0) {
+    return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
+  }
+
   // Sort descending by score
   scored.sort((a, b) => b.score - a.score);
   const top3 = scored.slice(0, 3).map((s) => ({

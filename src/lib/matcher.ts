@@ -141,7 +141,17 @@ export async function matchReceiptToTransactions(
 
   const best = scored[0];
 
-  if (best.score >= 0.7)
+  // Recompute date score for best candidate — require date agreement for auto-match
+  const bestTx = transactions.find(tx => tx.id === best.transactionId);
+  const bestDateStr = bestTx?.transaction_date as string | null;
+  let bestDateScore = 0;
+  if (rDate && bestDateStr) {
+    const daysDiff = Math.abs((rDate.getTime() - new Date(bestDateStr).getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff < 1) bestDateScore = 0.3;
+    else if (daysDiff <= 3) bestDateScore = 0.15;
+  }
+
+  if (best.score >= 0.7 && bestDateScore > 0)
     return { transactionId: best.transactionId, score: best.score, status: "matched", suggestions: top3 };
   if (best.score >= 0.4)
     return { transactionId: best.transactionId, score: best.score, status: "needs_review", suggestions: top3 };

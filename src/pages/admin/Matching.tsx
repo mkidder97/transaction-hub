@@ -175,7 +175,7 @@ function ReceiptThumb({
   isPlaceholder = false,
 }: {
   storagePath: string | null;
-  onClick: (url: string) => void;
+  onClick: (url: string, isPdf?: boolean) => void;
   size?: number;
   isPlaceholder?: boolean;
 }) {
@@ -192,12 +192,12 @@ function ReceiptThumb({
     );
   }
 
-  if (isPlaceholder && url) {
+  if (isPlaceholder) {
     return (
       <div
         className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
         style={{ width: size, height: size }}
-        onClick={() => onClick(url)}
+        onClick={() => onClick(url, true)}
         title="View placeholder PDF"
       >
         <FileText className="h-4 w-4 text-muted-foreground" />
@@ -211,7 +211,7 @@ function ReceiptThumb({
       alt="Receipt"
       className="rounded object-cover cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
       style={{ width: size, height: size }}
-      onClick={() => onClick(url)}
+      onClick={() => onClick(url, false)}
     />
   );
 }

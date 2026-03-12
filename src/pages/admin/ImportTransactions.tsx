@@ -342,7 +342,6 @@ const ImportTransactions = () => {
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-    reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
       if (lines.length < 2) { toast.info("CSV appears empty."); return; }

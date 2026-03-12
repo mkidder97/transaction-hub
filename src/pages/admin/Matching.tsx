@@ -1180,7 +1180,7 @@ const Matching = () => {
                   {filteredAll.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} isPlaceholder={r.is_placeholder ?? false} />
+                        <ReceiptThumb storagePath={r.storage_path} onClickPath={openLightbox} isPlaceholder={r.is_placeholder ?? false} />
                       </TableCell>
                       <TableCell>
                         <ExtractedIndicator receipt={r} />

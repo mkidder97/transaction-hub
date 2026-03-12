@@ -742,12 +742,13 @@ const Matching = () => {
 
   const matchesVendorR = (r: ReceiptRow) =>
     !filterVendor || (rv(r).toLowerCase().includes(vendorLower));
+  const activeEmp = filterEmployee && filterEmployee !== "all" ? filterEmployee.toLowerCase() : "";
   const matchesEmpR = (r: ReceiptRow) =>
-    !filterEmployee || (r.employee?.full_name?.toLowerCase().includes(empLower) ?? false);
+    !activeEmp || (r.employee?.full_name?.toLowerCase().includes(activeEmp) ?? false);
   const matchesVendorTx = (tx: TxRow) =>
     !filterVendor || ((tx.vendor_normalized ?? tx.vendor_raw ?? "").toLowerCase().includes(vendorLower));
   const matchesEmpTx = (tx: TxRow) =>
-    !filterEmployee || (tx.user?.full_name?.toLowerCase().includes(empLower) ?? false);
+    !activeEmp || (tx.user?.full_name?.toLowerCase().includes(activeEmp) ?? false);
 
   const filteredAll = allReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
   const filteredReview = reviewReceipts.filter((r) => matchesVendorR(r));

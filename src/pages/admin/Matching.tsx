@@ -759,10 +759,16 @@ const Matching = () => {
         {statCards.map((s) => (
           <Card
             key={s.label}
-            className="cursor-pointer transition-colors hover:border-primary/40"
+            className={`cursor-pointer transition-all hover:border-primary/40 ${
+              activeTab === s.tab
+                ? "ring-2 ring-primary border-primary shadow-sm"
+                : ""
+            }`}
             onClick={() => {
               setActiveTab(s.tab);
               setSearchParams({ tab: s.tab });
+              setFilterVendor("");
+              setFilterEmployee("");
             }}
           >
             <CardContent className="p-4 flex flex-col gap-1">
@@ -776,9 +782,40 @@ const Matching = () => {
         ))}
       </div>
 
-      <Separator />
+      {/* Filter / search bar */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
+          {statCards.find((s) => s.tab === activeTab)?.icon}
+          <span>{statCards.find((s) => s.tab === activeTab)?.label}</span>
+        </div>
+        <Separator orientation="vertical" className="h-6 hidden sm:block" />
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by vendor…"
+            className="pl-8 h-8 text-sm"
+            value={filterVendor}
+            onChange={(e) => setFilterVendor(e.target.value)}
+          />
+        </div>
+        {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (
+          <div className="relative min-w-[140px] max-w-xs">
+            <Input
+              placeholder="Filter by employee…"
+              className="h-8 text-sm"
+              value={filterEmployee}
+              onChange={(e) => setFilterEmployee(e.target.value)}
+            />
+          </div>
+        )}
+        {(filterVendor || filterEmployee) && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterVendor(""); setFilterEmployee(""); }}>
+            Clear
+          </Button>
+        )}
+      </div>
 
-      {/* Tabs */}
+      {/* Tab content (no visible tab strip) */}
       <Tabs
         value={activeTab}
         onValueChange={(v) => {
@@ -786,24 +823,6 @@ const Matching = () => {
           setSearchParams({ tab: v });
         }}
       >
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all">
-            All Receipts{stats.total > 0 && ` (${stats.total})`}
-          </TabsTrigger>
-          <TabsTrigger value="needs-review">
-            Needs Review{stats.needsReview > 0 && ` (${stats.needsReview})`}
-          </TabsTrigger>
-          <TabsTrigger value="unmatched">
-            No Match Found{stats.unmatched > 0 && ` (${stats.unmatched})`}
-          </TabsTrigger>
-          <TabsTrigger value="no-receipt">
-            Tx Missing Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
-          </TabsTrigger>
-          <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
-          <TabsTrigger value="duplicates">
-            Duplicates{duplicateGroups.length > 0 && ` (${duplicateGroups.length})`}
-          </TabsTrigger>
-        </TabsList>
 
         {/* ── Tab: All Receipts ────────────────────────────────── */}
         <TabsContent value="all">

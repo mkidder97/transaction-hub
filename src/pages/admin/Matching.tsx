@@ -1018,6 +1018,9 @@ const Matching = () => {
                           <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
                         ) : "—"}
                       </TableCell>
+                      <TableCell>
+                        <ReceiptActionsMenu receiptId={r.id} status={r.status} />
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

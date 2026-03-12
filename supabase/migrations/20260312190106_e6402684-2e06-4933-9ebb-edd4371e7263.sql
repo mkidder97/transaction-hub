@@ -1,0 +1,1 @@
+ALTER TABLE public.receipts ADD COLUMN IF NOT EXISTS is_placeholder boolean DEFAULT false;

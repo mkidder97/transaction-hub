@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,13 +68,24 @@ import {
   ExternalLink,
   Copy,
   FileDown,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 import { runMatchingForPeriod } from "@/lib/matcher";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { detectDuplicatesForPeriod, DuplicateGroup } from "@/lib/duplicateDetector";
-import { generatePlaceholderReceipt } from "@/lib/generatePlaceholderReceipt";
+import { buildPlaceholderBlob } from "@/lib/generatePlaceholderReceipt";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 
@@ -118,6 +130,7 @@ interface ReceiptRow {
   photo_url: string | null;
   storage_path: string | null;
   user_id: string;
+  is_placeholder: boolean | null;
   employee: { full_name: string | null } | null;
   transaction: {
     id: string;
@@ -130,6 +143,7 @@ interface ReceiptRow {
 
 interface TxRow {
   id: string;
+  user_id: string | null;
   vendor_raw: string | null;
   vendor_normalized: string | null;
   amount: number | null;
@@ -158,10 +172,12 @@ function ReceiptThumb({
   storagePath,
   onClick,
   size = 40,
+  isPlaceholder = false,
 }: {
   storagePath: string | null;
   onClick: (url: string) => void;
   size?: number;
+  isPlaceholder?: boolean;
 }) {
   const url = useSignedUrl(storagePath);
 
@@ -175,6 +191,20 @@ function ReceiptThumb({
       </div>
     );
   }
+
+  if (isPlaceholder && url) {
+    return (
+      <div
+        className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
+        style={{ width: size, height: size }}
+        onClick={() => window.open(url, "_blank")}
+        title="View placeholder PDF"
+      >
+        <FileText className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <img
       src={url}
@@ -289,6 +319,10 @@ const Matching = () => {
   // Legacy tx fetch cache for needs_review cards with transaction_id but no suggestions
   const [legacyTxCache, setLegacyTxCache] = useState<Record<string, { id: string; vendor_normalized: string | null; vendor_raw: string | null; amount: number | null; transaction_date: string | null }>>({});
 
+  // Placeholder confirmation
+  const [placeholderTx, setPlaceholderTx] = useState<TxRow | null>(null);
+  const [placeholderLoading, setPlaceholderLoading] = useState(false);
+
   // Search modal
   const [searchModal, setSearchModal] = useState<{ type: "receipt" | "transaction"; sourceId: string } | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -379,7 +413,7 @@ const Matching = () => {
   }, []);
 
   /* ── Fetch tab data ─────────────────────────────────────────── */
-  const selectFields = "id, storage_path, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id";
+  const selectFields = "id, storage_path, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, is_placeholder";
 
   const fetchAll = useCallback(async (pid: string) => {
     setAllLoading(true);
@@ -421,7 +455,7 @@ const Matching = () => {
     setOrphanLoading(true);
     const { data } = await supabase
       .from("transactions")
-      .select("id, vendor_raw, vendor_normalized, amount, transaction_date, card_last_four, match_status, user:profiles!transactions_user_id_fkey(full_name)")
+      .select("id, user_id, vendor_raw, vendor_normalized, amount, transaction_date, card_last_four, match_status, user:profiles!transactions_user_id_fkey(full_name)")
       .eq("statement_period_id", pid)
       .eq("match_status", "unmatched")
       .order("transaction_date", { ascending: false });
@@ -592,6 +626,62 @@ const Matching = () => {
       .in("id", [duplicateId, originalId]);
     toast.success("Dismissed — kept both");
     refreshAll(periodId);
+  };
+
+  /* ── Placeholder handler ────────────────────────────────────── */
+  const confirmPlaceholder = async () => {
+    if (!placeholderTx || !periodId) return;
+    setPlaceholderLoading(true);
+    try {
+      const blob = await buildPlaceholderBlob({
+        id: placeholderTx.id,
+        vendor_raw: placeholderTx.vendor_raw,
+        vendor_normalized: placeholderTx.vendor_normalized,
+        amount: placeholderTx.amount,
+        transaction_date: placeholderTx.transaction_date,
+        card_last_four: placeholderTx.card_last_four,
+        employeeName: placeholderTx.user?.full_name ?? null,
+        periodName: selectedPeriod?.name ?? null,
+      });
+
+      const storagePath = `placeholders/${placeholderTx.id}.pdf`;
+      const { error: uploadError } = await supabase.storage
+        .from("receipts")
+        .upload(storagePath, blob, { contentType: "application/pdf", upsert: true });
+      if (uploadError) throw uploadError;
+
+      const { data: newReceipt, error: receiptError } = await supabase
+        .from("receipts")
+        .insert({
+          user_id: placeholderTx.user_id,
+          statement_period_id: periodId,
+          storage_path: storagePath,
+          match_status: "matched",
+          match_confidence: 1,
+          transaction_id: placeholderTx.id,
+          vendor_confirmed: placeholderTx.vendor_normalized ?? placeholderTx.vendor_raw,
+          amount_confirmed: placeholderTx.amount,
+          date_confirmed: placeholderTx.transaction_date,
+          status: "approved",
+          is_placeholder: true,
+        } as any)
+        .select("id")
+        .single();
+      if (receiptError) throw receiptError;
+
+      await supabase
+        .from("transactions")
+        .update({ receipt_id: newReceipt.id, match_status: "matched", match_confidence: 1 })
+        .eq("id", placeholderTx.id);
+
+      toast.success("Placeholder filed — transaction moved to Matched");
+      setPlaceholderTx(null);
+      refreshAll(periodId);
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to create placeholder");
+    } finally {
+      setPlaceholderLoading(false);
+    }
   };
 
   /* ── Approve / Flag receipt ─────────────────────────────────── */
@@ -1309,7 +1399,7 @@ const Matching = () => {
                             <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
                               <Flag className="h-3 w-3 mr-1" /> No Receipt
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => generatePlaceholderReceipt({ ...tx, employeeName: tx.user?.full_name ?? null, periodName: selectedPeriod?.name ?? null })}>
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
                               <FileDown className="h-3 w-3 mr-1" /> Placeholder
                             </Button>
                           </div>
@@ -1355,7 +1445,11 @@ const Matching = () => {
                   {filteredMatched.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
+                        <ReceiptThumb
+                          storagePath={r.storage_path}
+                          onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
+                          isPlaceholder={r.is_placeholder ?? false}
+                        />
                       </TableCell>
                       <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
@@ -1549,6 +1643,30 @@ const Matching = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ── Placeholder Confirmation Dialog ─────────────────── */}
+      <AlertDialog open={!!placeholderTx} onOpenChange={(open) => !open && setPlaceholderTx(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No receipt available?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will generate a placeholder document for{" "}
+              <span className="font-medium">{placeholderTx?.vendor_normalized ?? placeholderTx?.vendor_raw ?? "this transaction"}</span>{" "}
+              ({placeholderTx?.amount != null ? `$${Number(placeholderTx.amount).toFixed(2)}` : ""}
+              {placeholderTx?.transaction_date ? ` · ${placeholderTx.transaction_date}` : ""}).
+              The placeholder will be filed in place of a receipt and the transaction
+              will move to Matched. This confirms no physical receipt exists.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPlaceholder} disabled={placeholderLoading}>
+              {placeholderLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Yes, generate placeholder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Search Modal ──────────────────────────────────────── */}
       <Dialog open={!!searchModal} onOpenChange={(open) => !open && setSearchModal(null)}>

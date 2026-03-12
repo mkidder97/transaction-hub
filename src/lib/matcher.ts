@@ -106,6 +106,7 @@ export async function matchReceiptToTransactions(
     }
 
     // Date scoring (max 0.3)
+    // If both sides have dates but are >3 days apart, treat as invalid candidate.
     if (rDate && txDateStr) {
       const txDate = new Date(txDateStr);
       const daysDiff = Math.abs(
@@ -115,6 +116,8 @@ export async function matchReceiptToTransactions(
         score += 0.3;
       } else if (daysDiff <= 3) {
         score += 0.15;
+      } else {
+        continue;
       }
     }
 

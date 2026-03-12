@@ -175,7 +175,7 @@ function ReceiptThumb({
   isPlaceholder = false,
 }: {
   storagePath: string | null;
-  onClick: (url: string) => void;
+  onClick: (url: string, isPdf?: boolean) => void;
   size?: number;
   isPlaceholder?: boolean;
 }) {
@@ -192,12 +192,12 @@ function ReceiptThumb({
     );
   }
 
-  if (isPlaceholder && url) {
+  if (isPlaceholder) {
     return (
       <div
         className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
         style={{ width: size, height: size }}
-        onClick={() => onClick(url)}
+        onClick={() => onClick(url, true)}
         title="View placeholder PDF"
       >
         <FileText className="h-4 w-4 text-muted-foreground" />
@@ -211,7 +211,7 @@ function ReceiptThumb({
       alt="Receipt"
       className="rounded object-cover cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
       style={{ width: size, height: size }}
-      onClick={() => onClick(url)}
+      onClick={() => onClick(url, false)}
     />
   );
 }
@@ -291,6 +291,12 @@ const Matching = () => {
 
   // Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+
+  const openLightbox = (url: string, isPdf = false) => {
+    setLightboxIsPdf(isPdf);
+    setLightboxUrl(url);
+  };
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
@@ -1122,7 +1128,7 @@ const Matching = () => {
                   {filteredAll.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
+                        <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} isPlaceholder={r.is_placeholder ?? false} />
                       </TableCell>
                       <TableCell>
                         <ExtractedIndicator receipt={r} />
@@ -1189,7 +1195,7 @@ const Matching = () => {
                       <div className="grid md:grid-cols-2 gap-4">
                         {/* Left: receipt info + thumbnail */}
                         <div className="space-y-2">
-                          <ReviewCardThumb storagePath={r.storage_path} onOpen={setLightboxUrl} />
+                          <ReviewCardThumb storagePath={r.storage_path} onOpen={(url) => openLightbox(url)} />
                           <div className="flex items-center gap-2">
                             <Image className="h-4 w-4 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground">Receipt</span>
@@ -1330,7 +1336,7 @@ const Matching = () => {
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
                           <TableCell>
-                            <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
+                            <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} />
                           </TableCell>
                           <TableCell>
                             <ExtractedIndicator receipt={r} />
@@ -1452,7 +1458,7 @@ const Matching = () => {
                       <TableCell>
                         <ReceiptThumb
                           storagePath={r.storage_path}
-                          onClick={setLightboxUrl}
+                          onClick={openLightbox}
                           isPlaceholder={r.is_placeholder ?? false}
                         />
                       </TableCell>
@@ -1550,7 +1556,7 @@ const Matching = () => {
                         <div className="flex items-start gap-3">
                           <ReceiptThumb
                             storagePath={group.original.storage_path}
-                            onClick={setLightboxUrl}
+                            onClick={openLightbox}
                             size={48}
                           />
                           <div className="text-sm space-y-0.5">
@@ -1587,7 +1593,7 @@ const Matching = () => {
                         <div className="flex items-start gap-3">
                           <ReceiptThumb
                             storagePath={group.duplicate.storage_path}
-                            onClick={setLightboxUrl}
+                            onClick={openLightbox}
                             size={48}
                           />
                           <div className="text-sm space-y-0.5">
@@ -1729,8 +1735,8 @@ const Matching = () => {
       <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
         <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Receipt Preview</DialogTitle>
-          {lightboxUrl?.includes(".pdf") ? (
-            <iframe src={lightboxUrl} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
+          {lightboxIsPdf ? (
+            <iframe src={lightboxUrl ?? ""} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
           ) : (
             <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
           )}

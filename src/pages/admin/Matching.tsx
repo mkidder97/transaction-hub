@@ -409,7 +409,7 @@ const Matching = () => {
   }, []);
 
   /* ── Fetch tab data ─────────────────────────────────────────── */
-  const selectFields = "id, storage_path, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id";
+  const selectFields = "id, storage_path, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, match_suggestions, transaction_id, ai_confidence, photo_url, user_id, is_placeholder";
 
   const fetchAll = useCallback(async (pid: string) => {
     setAllLoading(true);

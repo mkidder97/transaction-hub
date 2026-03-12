@@ -128,6 +128,7 @@ const ImportTransactions = () => {
           .from("transaction-screenshots")
           .upload(storagePath, file, { contentType: file.type, upsert: false });
         if (uploadErr) throw uploadErr;
+        allPaths.push(storagePath);
 
         const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
 

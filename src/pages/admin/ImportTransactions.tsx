@@ -64,6 +64,7 @@ const ImportTransactions = () => {
   const [rows, setRows] = useState<ParsedTransactionRow[]>([]);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [screenshotPaths, setScreenshotPaths] = useState<string[]>([]);
 
   // CSV tab state
   const [csvRawRows, setCsvRawRows] = useState<string[][]>([]);

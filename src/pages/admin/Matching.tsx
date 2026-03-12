@@ -66,12 +66,14 @@ import {
   Lock,
   ExternalLink,
   Copy,
+  FileDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 import { runMatchingForPeriod } from "@/lib/matcher";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { detectDuplicatesForPeriod, DuplicateGroup } from "@/lib/duplicateDetector";
+import { generatePlaceholderReceipt } from "@/lib/generatePlaceholderReceipt";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 
@@ -1266,6 +1268,9 @@ const Matching = () => {
                             </Button>
                             <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
                               <Flag className="h-3 w-3 mr-1" /> No Receipt
+                            </Button>
+                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => generatePlaceholderReceipt({ ...tx, employeeName: tx.user?.full_name ?? null, periodName: selectedPeriod?.name ?? null })}>
+                              <FileDown className="h-3 w-3 mr-1" /> Placeholder
                             </Button>
                           </div>
                         )}

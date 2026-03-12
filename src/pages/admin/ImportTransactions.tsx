@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -22,8 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 import { toast } from "sonner";
@@ -443,6 +443,20 @@ const ImportTransactions = () => {
           Import credit card statement data via screenshot OCR or CSV upload.
         </p>
       </div>
+
+      {/* Coming Soon Banner */}
+      <Card className="border-primary/20 bg-primary/5 relative">
+        <CardContent className="p-4 flex items-start gap-3">
+          <Zap className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <div className="space-y-1 pr-24">
+            <p className="text-sm font-semibold">Automated Statement Import — Coming Soon</p>
+            <p className="text-xs text-muted-foreground">
+              We're building an automated pipeline that will watch for your monthly Amex statement email and import transactions automatically — no manual upload required. This feature is in development.
+            </p>
+          </div>
+          <Badge variant="secondary" className="absolute top-4 right-4 text-[10px]">Coming Soon</Badge>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="screenshot">
         <TabsList>

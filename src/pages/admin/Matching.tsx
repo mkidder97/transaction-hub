@@ -1388,7 +1388,7 @@ const Matching = () => {
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
                           <TableCell>
-                            <ReceiptThumb storagePath={r.storage_path} onClick={openLightbox} />
+                            <ReceiptThumb storagePath={r.storage_path} onClickPath={openLightbox} />
                           </TableCell>
                           <TableCell>
                             <ExtractedIndicator receipt={r} />

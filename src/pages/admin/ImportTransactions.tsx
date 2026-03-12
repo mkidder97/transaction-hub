@@ -22,9 +22,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 import { toast } from "sonner";
 import { type ParsedTransactionRow } from "@/lib/ocr";
 import { v4 as uuidv4 } from "uuid";

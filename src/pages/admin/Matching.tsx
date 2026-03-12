@@ -919,7 +919,7 @@ const Matching = () => {
         <TabsContent value="needs-review">
           {reviewLoading ? (
             <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-lg" />)}</div>
-          ) : reviewReceipts.length === 0 ? (
+          ) : filteredReview.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />

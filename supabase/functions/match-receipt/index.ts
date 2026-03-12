@@ -222,8 +222,9 @@ async function matchSingleReceipt(
 
   scored.sort((a: any, b: any) => b.score - a.score);
   const best = scored[0];
+  const bestDateAgreement = dateScore(rDate, best.date);
 
-  if (best.score >= threshold) {
+  if (best.score >= threshold && bestDateAgreement > 0) {
     // Auto-match
     await sb
       .from("receipts")

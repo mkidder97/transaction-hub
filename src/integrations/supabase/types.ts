@@ -66,6 +66,7 @@ export type Database = {
         Row: {
           created_at: string
           failed_rows: number | null
+          file_paths: Json | null
           filename: string | null
           id: string
           imported_by: string | null
@@ -77,6 +78,7 @@ export type Database = {
         Insert: {
           created_at?: string
           failed_rows?: number | null
+          file_paths?: Json | null
           filename?: string | null
           id?: string
           imported_by?: string | null
@@ -88,6 +90,7 @@ export type Database = {
         Update: {
           created_at?: string
           failed_rows?: number | null
+          file_paths?: Json | null
           filename?: string | null
           id?: string
           imported_by?: string | null

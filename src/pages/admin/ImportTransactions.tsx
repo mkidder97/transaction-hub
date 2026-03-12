@@ -22,9 +22,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 import { toast } from "sonner";
 import { type ParsedTransactionRow } from "@/lib/ocr";
 import { v4 as uuidv4 } from "uuid";
@@ -37,6 +38,7 @@ interface ImportBatch {
   total_rows: number | null;
   imported_rows: number | null;
   status: string;
+  file_paths: string[] | null;
   importer: { full_name: string | null } | null;
 }
 
@@ -62,6 +64,7 @@ const ImportTransactions = () => {
   const [rows, setRows] = useState<ParsedTransactionRow[]>([]);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [screenshotPaths, setScreenshotPaths] = useState<string[]>([]);
 
   // CSV tab state
   const [csvRawRows, setCsvRawRows] = useState<string[][]>([]);
@@ -74,18 +77,21 @@ const ImportTransactions = () => {
   });
   const [csvMapped, setCsvMapped] = useState<ParsedTransactionRow[]>([]);
   const [csvFilename, setCsvFilename] = useState<string | null>(null);
+  const [csvStoragePath, setCsvStoragePath] = useState<string | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
 
   // Import history state
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(true);
+  const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+  const [batchFileUrls, setBatchFileUrls] = useState<Record<string, string[]>>({});
 
   const fetchBatches = useCallback(async () => {
     setBatchesLoading(true);
     const { data } = await supabase
       .from("import_batches")
-      .select("id, created_at, source, filename, total_rows, imported_rows, status, importer:profiles!import_batches_imported_by_fkey(full_name)")
+      .select("id, created_at, source, filename, total_rows, imported_rows, status, file_paths, importer:profiles!import_batches_imported_by_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(20);
     if (data) setBatches(data as unknown as ImportBatch[]);
@@ -102,12 +108,14 @@ const ImportTransactions = () => {
     const localUrls = fileList.map((f) => URL.createObjectURL(f));
     setPreviews(localUrls);
     setRows([]);
+    setScreenshotPaths([]);
     setOcrRunning(true);
     setOcrProgress(0);
     setOcrTotal(fileList.length);
     setOcrCurrent(0);
 
     const allRows: ParsedTransactionRow[] = [];
+    const allPaths: string[] = [];
     let failCount = 0;
 
     for (let i = 0; i < fileList.length; i++) {
@@ -121,6 +129,7 @@ const ImportTransactions = () => {
           .from("transaction-screenshots")
           .upload(storagePath, file, { contentType: file.type, upsert: false });
         if (uploadErr) throw uploadErr;
+        allPaths.push(storagePath);
 
         const { data: urlData } = supabase.storage.from("transaction-screenshots").getPublicUrl(storagePath);
 
@@ -146,6 +155,7 @@ const ImportTransactions = () => {
 
     setOcrProgress(1);
     setRows(allRows);
+    setScreenshotPaths(allPaths);
     if (allRows.length === 0 && failCount === 0) {
       toast.error("No transactions detected — try clearer screenshots.");
     } else if (allRows.length > 0) {
@@ -163,7 +173,7 @@ const ImportTransactions = () => {
   };
 
   // -- Shared import logic --
-  const confirmImport = useCallback(async (sourceRows: ParsedTransactionRow[], source: string, filename: string | null) => {
+  const confirmImport = useCallback(async (sourceRows: ParsedTransactionRow[], source: string, filename: string | null, filePaths?: string[]) => {
     if (!user || sourceRows.length === 0) return;
     const setImportingFn = source === "screenshot" ? setImporting : setCsvImporting;
     setImportingFn(true);
@@ -177,6 +187,7 @@ const ImportTransactions = () => {
           total_rows: sourceRows.length,
           status: "processing",
           imported_by: user.id,
+          file_paths: filePaths ?? [],
         })
         .select("id")
         .single();
@@ -301,6 +312,7 @@ const ImportTransactions = () => {
         setCsvHeaders([]);
         setCsvMapped([]);
         setCsvFilename(null);
+        setCsvStoragePath(null);
         setCsvMapping({ date: "", vendor: "", amount: "", card_last_four: "" });
         if (csvRef.current) csvRef.current.value = "";
       }
@@ -312,11 +324,23 @@ const ImportTransactions = () => {
   }, [user]);
 
   // -- CSV handlers --
-  const handleCsv = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCsv = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setCsvFilename(file.name);
     setCsvMapped([]);
+
+    // Upload CSV to storage
+    const path = `csv/${uuidv4()}_${file.name}`;
+    const { error: upErr } = await supabase.storage
+      .from("transaction-screenshots")
+      .upload(path, file, { contentType: "text/csv", upsert: false });
+    if (upErr) {
+      console.error("CSV upload failed:", upErr);
+    } else {
+      setCsvStoragePath(path);
+    }
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
@@ -462,7 +486,7 @@ const ImportTransactions = () => {
             <>
               <p className="text-sm text-muted-foreground">{rows.length} row(s) detected — review and edit before importing.</p>
               <EditableTable data={rows} onUpdate={updateRow} onRemove={removeRow} />
-              <Button className="gap-2" onClick={() => confirmImport(rows, "screenshot", null)} disabled={importing}>
+              <Button className="gap-2" onClick={() => confirmImport(rows, "screenshot", null, screenshotPaths)} disabled={importing}>
                 {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Confirm Import ({rows.length})
               </Button>
@@ -592,7 +616,7 @@ const ImportTransactions = () => {
                 >
                   Back to Mapping
                 </Button>
-                <Button className="gap-2" onClick={() => confirmImport(csvMapped, "csv", csvFilename)} disabled={csvImporting}>
+                <Button className="gap-2" onClick={() => confirmImport(csvMapped, "csv", csvFilename, csvStoragePath ? [csvStoragePath] : [])} disabled={csvImporting}>
                   {csvImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   Confirm Import ({csvMapped.length})
                 </Button>
@@ -626,6 +650,7 @@ const ImportTransactions = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10" />
                   <TableHead>Date</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead>Filename</TableHead>
@@ -635,46 +660,118 @@ const ImportTransactions = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {batches.map((b) => (
-                  <TableRow key={b.id}>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {new Date(b.created_at).toLocaleDateString()}{" "}
-                      <span className="text-muted-foreground text-xs">
-                        {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {b.source === "screenshot" ? "Screenshot" : "CSV"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm truncate max-w-[160px]">
-                      {b.filename ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {b.importer?.full_name ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {b.imported_rows ?? 0} / {b.total_rows ?? 0}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={`text-[10px] px-1.5 py-0 ${
-                          b.status === "complete"
-                            ? "bg-accent/15 text-accent"
-                            : b.status === "processing"
-                            ? "bg-warning/15 text-warning"
-                            : b.status === "failed"
-                            ? "bg-destructive/15 text-destructive"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {b.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {batches.map((b) => {
+                  const hasFiles = b.file_paths && b.file_paths.length > 0;
+                  const isExpanded = expandedBatch === b.id;
+                  return (
+                    <>
+                      <TableRow key={b.id} className={hasFiles ? "cursor-pointer hover:bg-muted/50" : ""} onClick={() => {
+                        if (!hasFiles) return;
+                        if (isExpanded) {
+                          setExpandedBatch(null);
+                        } else {
+                          setExpandedBatch(b.id);
+                          // Load signed URLs if not cached
+                          if (!batchFileUrls[b.id]) {
+                            Promise.all(
+                              (b.file_paths ?? []).map(async (p) => {
+                                const { data } = await supabase.storage
+                                  .from("transaction-screenshots")
+                                  .createSignedUrl(p, 3600);
+                                return data?.signedUrl ?? null;
+                              })
+                            ).then((urls) => {
+                              setBatchFileUrls((prev) => ({
+                                ...prev,
+                                [b.id]: urls.filter(Boolean) as string[],
+                              }));
+                            });
+                          }
+                        }
+                      }}>
+                        <TableCell className="w-10 px-2">
+                          {hasFiles ? (
+                            isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {new Date(b.created_at).toLocaleDateString()}{" "}
+                          <span className="text-muted-foreground text-xs">
+                            {new Date(b.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {b.source === "screenshot" ? "Screenshot" : "CSV"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm truncate max-w-[160px]">
+                          {b.filename ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {b.importer?.full_name ?? "—"}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {b.imported_rows ?? 0} / {b.total_rows ?? 0}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] px-1.5 py-0 ${
+                              b.status === "complete"
+                                ? "bg-accent/15 text-accent"
+                                : b.status === "processing"
+                                ? "bg-warning/15 text-warning"
+                                : b.status === "failed"
+                                ? "bg-destructive/15 text-destructive"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {b.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      {isExpanded && (
+                        <TableRow key={`${b.id}-files`}>
+                          <TableCell colSpan={7} className="bg-muted/30 p-4">
+                            {batchFileUrls[b.id] ? (
+                              <div className="flex gap-3 flex-wrap">
+                                {batchFileUrls[b.id].map((url, i) => {
+                                  const path = b.file_paths?.[i] ?? "";
+                                  const isCsv = path.endsWith(".csv") || b.source === "csv";
+                                  return isCsv ? (
+                                    <a
+                                      key={i}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border bg-background text-sm hover:bg-muted transition-colors"
+                                    >
+                                      <Upload className="h-3.5 w-3.5" />
+                                      {b.filename ?? `File ${i + 1}`}
+                                    </a>
+                                  ) : (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                      <img
+                                        src={url}
+                                        alt={`Import file ${i + 1}`}
+                                        className="h-32 w-auto rounded-md border object-cover hover:opacity-80 transition-opacity"
+                                      />
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin" /> Loading files…
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

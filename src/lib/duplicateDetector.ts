@@ -61,7 +61,7 @@ export async function detectDuplicatesForPeriod(
       "id, user_id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, photo_url, storage_path, match_status, duplicate_status, duplicate_of_id, created_at, employee:profiles!receipts_user_id_fkey(full_name)"
     )
     .eq("statement_period_id", periodId)
-    .not("duplicate_status", "eq", "not_duplicate")
+    .or("duplicate_status.is.null,duplicate_status.neq.not_duplicate")
     .order("created_at", { ascending: true });
 
   if (error || !data) return [];

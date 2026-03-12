@@ -1564,6 +1564,30 @@ const Matching = () => {
           <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
         </DialogContent>
       </Dialog>
+
+      {/* ── Flag Dialog ───────────────────────────────────────── */}
+      <Dialog open={!!flagReceiptId} onOpenChange={(open) => { if (!open) { setFlagReceiptId(null); setFlagReason(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Flag Receipt</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for flagging…"
+            value={flagReason}
+            onChange={(e) => setFlagReason(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setFlagReceiptId(null); setFlagReason(""); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleFlag} disabled={flagSubmitting || !flagReason.trim()}>
+              {flagSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Flag className="h-4 w-4 mr-1" />}
+              Flag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

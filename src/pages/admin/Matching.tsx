@@ -300,6 +300,11 @@ const Matching = () => {
   const [filterEmployee, setFilterEmployee] = useState("");
   const [employeeOptions, setEmployeeOptions] = useState<{ id: string; name: string }[]>([]);
 
+  // Flag dialog state
+  const [flagReceiptId, setFlagReceiptId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState("");
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
+
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
 

@@ -234,7 +234,7 @@ function ReviewCardThumb({
   onOpen,
 }: {
   storagePath: string | null;
-  onOpen: (url: string) => void;
+  onOpen: (path: string) => void;
 }) {
   const url = useSignedUrl(storagePath);
   if (!storagePath || !url) return null;
@@ -244,13 +244,13 @@ function ReviewCardThumb({
         src={url}
         alt="Receipt"
         className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
-        onClick={() => onOpen(url)}
+        onClick={() => onOpen(storagePath)}
       />
       <Button
         size="sm"
         variant="ghost"
         className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
-        onClick={() => onOpen(url)}
+        onClick={() => onOpen(storagePath)}
       >
         <ExternalLink className="h-3 w-3" /> View Receipt
       </Button>

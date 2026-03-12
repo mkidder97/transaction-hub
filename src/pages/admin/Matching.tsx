@@ -1183,7 +1183,7 @@ const Matching = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {matchedReceipts.map((r) => (
+                  {filteredMatched.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
                         <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />

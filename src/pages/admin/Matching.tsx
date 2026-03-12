@@ -738,7 +738,6 @@ const Matching = () => {
 
   // Inline filter helpers
   const vendorLower = filterVendor.toLowerCase();
-  const empLower = filterEmployee.toLowerCase();
 
   const matchesVendorR = (r: ReceiptRow) =>
     !filterVendor || (rv(r).toLowerCase().includes(vendorLower));

@@ -978,6 +978,7 @@ const Matching = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Match</TableHead>
                     <TableHead>Matched Tx</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>

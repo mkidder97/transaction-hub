@@ -1127,12 +1127,18 @@ const Matching = () => {
                           {isClosed ? (
                             <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
                           ) : (
-                            <div className="flex gap-2 mt-2">
+                            <div className="flex gap-2 mt-2 flex-wrap">
                               <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
                                 <Search className="h-3 w-3 mr-1" /> Use Different
                               </Button>
                               <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
                                 <XCircle className="h-3 w-3 mr-1" /> No Match
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => handleApprove(r.id)} disabled={r.status === "approved"}>
+                                <CheckCircle className="h-3 w-3 mr-1 text-accent" /> Approve
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }} disabled={r.status === "flagged"}>
+                                <Flag className="h-3 w-3 mr-1 text-destructive" /> Flag
                               </Button>
                             </div>
                           )}

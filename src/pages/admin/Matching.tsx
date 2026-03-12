@@ -319,6 +319,10 @@ const Matching = () => {
   // Legacy tx fetch cache for needs_review cards with transaction_id but no suggestions
   const [legacyTxCache, setLegacyTxCache] = useState<Record<string, { id: string; vendor_normalized: string | null; vendor_raw: string | null; amount: number | null; transaction_date: string | null }>>({});
 
+  // Placeholder confirmation
+  const [placeholderTx, setPlaceholderTx] = useState<TxRow | null>(null);
+  const [placeholderLoading, setPlaceholderLoading] = useState(false);
+
   // Search modal
   const [searchModal, setSearchModal] = useState<{ type: "receipt" | "transaction"; sourceId: string } | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);

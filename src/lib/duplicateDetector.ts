@@ -42,6 +42,14 @@ function vendorSimilarity(a: string | null, b: string | null): number {
   return (2 * overlap) / (bg1.size + bg2.size);
 }
 
+function dateDiffDays(a: string | null, b: string | null): number {
+  if (!a || !b) return Infinity;
+  const msA = Date.parse(a);
+  const msB = Date.parse(b);
+  if (isNaN(msA) || isNaN(msB)) return Infinity;
+  return Math.abs(msA - msB) / 86_400_000;
+}
+
 function getVendor(r: DuplicateReceipt) {
   return r.vendor_confirmed ?? r.vendor_extracted;
 }

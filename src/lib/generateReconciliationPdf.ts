@@ -95,7 +95,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 1: Matched Pairs", 14, 20);
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: 28,
     head: [["Employee", "Receipt Vendor", "Receipt Amt", "Receipt Date", "Tx Vendor", "Tx Amt", "Tx Date", "Type", "Confidence"]],
     body: matched.map((row) => [

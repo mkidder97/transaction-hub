@@ -74,7 +74,17 @@ import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 import { runMatchingForPeriod } from "@/lib/matcher";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { detectDuplicatesForPeriod, DuplicateGroup } from "@/lib/duplicateDetector";
-import { generatePlaceholderReceipt } from "@/lib/generatePlaceholderReceipt";
+import { buildPlaceholderBlob } from "@/lib/generatePlaceholderReceipt";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 

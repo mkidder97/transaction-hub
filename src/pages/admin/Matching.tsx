@@ -302,21 +302,62 @@ const Matching = () => {
   const [activeTab, setActiveTab] = useState(initialTab);
 
   // Lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxLoading, setLightboxLoading] = useState(false);
+  const [lightboxError, setLightboxError] = useState<string | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [lightboxIsPdf, setLightboxIsPdf] = useState(false);
+  const lightboxObjectUrlRef = useRef<string | null>(null);
+
+  const cleanupLightbox = useCallback(() => {
+    if (lightboxObjectUrlRef.current) {
+      URL.revokeObjectURL(lightboxObjectUrlRef.current);
+      lightboxObjectUrlRef.current = null;
+    }
+  }, []);
 
   const openLightbox = useCallback(async (storagePath: string) => {
     const isPdf = storagePath.toLowerCase().endsWith(".pdf");
-    setLightboxIsPdf(isPdf);
+
+    setLightboxOpen(true);
+    setLightboxLoading(true);
+    setLightboxError(null);
     setLightboxUrl(null);
-    const url = await getSignedReceiptUrl(storagePath);
-    setLightboxUrl(url);
-  }, []);
+    setLightboxIsPdf(isPdf);
+    cleanupLightbox();
+
+    try {
+      if (isPdf) {
+        const { data, error } = await supabase.storage.from("receipts").download(storagePath);
+        if (error || !data) throw new Error("Could not load PDF preview");
+
+        const objectUrl = URL.createObjectURL(data);
+        lightboxObjectUrlRef.current = objectUrl;
+        setLightboxUrl(objectUrl);
+      } else {
+        const signedUrl = await getSignedReceiptUrl(storagePath);
+        if (!signedUrl) throw new Error("Could not load receipt preview");
+        setLightboxUrl(signedUrl);
+      }
+    } catch (err: any) {
+      setLightboxError(err?.message ?? "Failed to load preview");
+    } finally {
+      setLightboxLoading(false);
+    }
+  }, [cleanupLightbox]);
 
   const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+    setLightboxLoading(false);
+    setLightboxError(null);
     setLightboxUrl(null);
     setLightboxIsPdf(false);
-  }, []);
+    cleanupLightbox();
+  }, [cleanupLightbox]);
+
+  useEffect(() => {
+    return () => cleanupLightbox();
+  }, [cleanupLightbox]);
 
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);

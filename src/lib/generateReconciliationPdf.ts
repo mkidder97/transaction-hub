@@ -177,15 +177,6 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
     headStyles: { fillColor: [99, 102, 241] },
   });
 
-  // Save via blob for iframe/sandbox compatibility
   const filename = `reconciliation-${period.name.replace(/\s+/g, "-").toLowerCase()}.pdf`;
-  const blob = doc.output("blob");
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  doc.save(filename);
 }

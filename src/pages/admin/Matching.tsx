@@ -1125,7 +1125,7 @@ const Matching = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orphanTxs.map((tx) => (
+                  {filteredOrphans.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>

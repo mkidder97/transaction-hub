@@ -1510,7 +1510,7 @@ const Matching = () => {
                       <TableCell>
                         <ReceiptThumb
                           storagePath={r.storage_path}
-                          onClick={openLightbox}
+                          onClickPath={openLightbox}
                           isPlaceholder={r.is_placeholder ?? false}
                         />
                       </TableCell>

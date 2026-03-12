@@ -38,6 +38,7 @@ interface ImportBatch {
   total_rows: number | null;
   imported_rows: number | null;
   status: string;
+  file_paths: string[] | null;
   importer: { full_name: string | null } | null;
 }
 

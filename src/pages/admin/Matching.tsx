@@ -1441,7 +1441,11 @@ const Matching = () => {
                   {filteredMatched.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
+                        <ReceiptThumb
+                          storagePath={r.storage_path}
+                          onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
+                          isPlaceholder={r.is_placeholder ?? false}
+                        />
                       </TableCell>
                       <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{rv(r)}</TableCell>

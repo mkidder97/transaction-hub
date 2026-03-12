@@ -312,6 +312,7 @@ const ImportTransactions = () => {
         setCsvHeaders([]);
         setCsvMapped([]);
         setCsvFilename(null);
+        setCsvStoragePath(null);
         setCsvMapping({ date: "", vendor: "", amount: "", card_last_four: "" });
         if (csvRef.current) csvRef.current.value = "";
       }

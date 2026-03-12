@@ -1,0 +1,1 @@
+ALTER TABLE public.import_batches ADD COLUMN file_paths jsonb DEFAULT '[]'::jsonb;

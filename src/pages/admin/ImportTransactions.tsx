@@ -90,7 +90,7 @@ const ImportTransactions = () => {
     setBatchesLoading(true);
     const { data } = await supabase
       .from("import_batches")
-      .select("id, created_at, source, filename, total_rows, imported_rows, status, importer:profiles!import_batches_imported_by_fkey(full_name)")
+      .select("id, created_at, source, filename, total_rows, imported_rows, status, file_paths, importer:profiles!import_batches_imported_by_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(20);
     if (data) setBatches(data as unknown as ImportBatch[]);

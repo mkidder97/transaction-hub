@@ -1784,13 +1784,22 @@ const Matching = () => {
       </Dialog>
 
       {/* ── Image Lightbox ────────────────────────────────────── */}
-      <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
+      <Dialog open={lightboxOpen} onOpenChange={(open) => { if (!open) closeLightbox(); }}>
         <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Receipt Preview</DialogTitle>
-          {lightboxIsPdf ? (
-            <iframe src={lightboxUrl ?? ""} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
+          {lightboxLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : lightboxError ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
+              <AlertTriangle className="h-8 w-8" />
+              <p className="text-sm">{lightboxError}</p>
+            </div>
+          ) : lightboxMime.startsWith("application/pdf") ? (
+            <iframe src={lightboxObjectUrl ?? ""} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
           ) : (
-            <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+            <img src={lightboxObjectUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
           )}
         </DialogContent>
       </Dialog>

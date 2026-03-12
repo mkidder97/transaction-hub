@@ -28,9 +28,17 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Tooltip,
   TooltipContent,
@@ -39,6 +47,7 @@ import {
 } from "@/components/ui/tooltip";
 import {
   Loader2,
+  MoreHorizontal,
   Zap,
   FileCheck,
   AlertTriangle,
@@ -290,6 +299,11 @@ const Matching = () => {
   const [filterVendor, setFilterVendor] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
   const [employeeOptions, setEmployeeOptions] = useState<{ id: string; name: string }[]>([]);
+
+  // Flag dialog state
+  const [flagReceiptId, setFlagReceiptId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState("");
+  const [flagSubmitting, setFlagSubmitting] = useState(false);
 
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
@@ -576,6 +590,68 @@ const Matching = () => {
       .in("id", [duplicateId, originalId]);
     toast.success("Dismissed — kept both");
     refreshAll(periodId);
+  };
+
+  /* ── Approve / Flag receipt ─────────────────────────────────── */
+  const handleApprove = async (receiptId: string) => {
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "approved", reviewed_at: new Date().toISOString() })
+      .eq("id", receiptId);
+    if (error) {
+      toast.error("Failed to approve receipt");
+      return;
+    }
+    toast.success("Receipt approved");
+    refreshAll(periodId);
+  };
+
+  const handleFlag = async () => {
+    if (!flagReceiptId) return;
+    setFlagSubmitting(true);
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "flagged", flag_reason: flagReason, reviewed_at: new Date().toISOString() })
+      .eq("id", flagReceiptId);
+    setFlagSubmitting(false);
+    if (error) {
+      toast.error("Failed to flag receipt");
+      return;
+    }
+    toast.success("Receipt flagged");
+    setFlagReceiptId(null);
+    setFlagReason("");
+    refreshAll(periodId);
+  };
+
+  /* ── Receipt actions dropdown ───────────────────────────────── */
+  const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
+    if (isClosed) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => handleApprove(receiptId)}
+            disabled={status === "approved"}
+          >
+            <CheckCircle className="h-4 w-4 mr-2 text-accent" />
+            Approve
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => { setFlagReceiptId(receiptId); setFlagReason(""); }}
+            disabled={status === "flagged"}
+          >
+            <Flag className="h-4 w-4 mr-2 text-destructive" />
+            Flag
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
   };
 
   /* ── Search modal helpers ───────────────────────────────────── */
@@ -902,6 +978,7 @@ const Matching = () => {
                     <TableHead>Status</TableHead>
                     <TableHead>Match</TableHead>
                     <TableHead>Matched Tx</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -940,6 +1017,9 @@ const Matching = () => {
                         {r.transaction ? (
                           <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
                         ) : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <ReceiptActionsMenu receiptId={r.id} status={r.status} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1047,12 +1127,18 @@ const Matching = () => {
                           {isClosed ? (
                             <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
                           ) : (
-                            <div className="flex gap-2 mt-2">
+                            <div className="flex gap-2 mt-2 flex-wrap">
                               <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
                                 <Search className="h-3 w-3 mr-1" /> Use Different
                               </Button>
                               <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
                                 <XCircle className="h-3 w-3 mr-1" /> No Match
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => handleApprove(r.id)} disabled={r.status === "approved"}>
+                                <CheckCircle className="h-3 w-3 mr-1 text-accent" /> Approve
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }} disabled={r.status === "flagged"}>
+                                <Flag className="h-3 w-3 mr-1 text-destructive" /> Flag
                               </Button>
                             </div>
                           )}
@@ -1098,6 +1184,7 @@ const Matching = () => {
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead className="w-32" />
+                      <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1123,6 +1210,9 @@ const Matching = () => {
                                 <Search className="h-3 w-3 mr-1" /> Find Transaction
                               </Button>
                             )}
+                          </TableCell>
+                          <TableCell>
+                            <ReceiptActionsMenu receiptId={r.id} status={r.status} />
                           </TableCell>
                         </TableRow>
                       );
@@ -1244,9 +1334,12 @@ const Matching = () => {
                         {isClosed ? (
                           <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
                         ) : (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
-                            <Unlink className="h-3 w-3" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
+                              <Unlink className="h-3 w-3" />
+                            </Button>
+                            <ReceiptActionsMenu receiptId={r.id} status={r.status} />
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -1469,6 +1562,30 @@ const Matching = () => {
         <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
           <DialogTitle className="sr-only">Receipt Image</DialogTitle>
           <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Flag Dialog ───────────────────────────────────────── */}
+      <Dialog open={!!flagReceiptId} onOpenChange={(open) => { if (!open) { setFlagReceiptId(null); setFlagReason(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Flag Receipt</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            placeholder="Reason for flagging…"
+            value={flagReason}
+            onChange={(e) => setFlagReason(e.target.value)}
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setFlagReceiptId(null); setFlagReason(""); }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleFlag} disabled={flagSubmitting || !flagReason.trim()}>
+              {flagSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Flag className="h-4 w-4 mr-1" />}
+              Flag
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

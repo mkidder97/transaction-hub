@@ -10,7 +10,6 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -48,6 +47,7 @@ import {
   CreditCard,
   CheckCircle,
   XCircle,
+  X,
   Search,
   Unlink,
   Flag,

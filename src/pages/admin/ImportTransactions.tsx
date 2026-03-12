@@ -83,6 +83,8 @@ const ImportTransactions = () => {
   // Import history state
   const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(true);
+  const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+  const [batchFileUrls, setBatchFileUrls] = useState<Record<string, string[]>>({});
 
   const fetchBatches = useCallback(async () => {
     setBatchesLoading(true);

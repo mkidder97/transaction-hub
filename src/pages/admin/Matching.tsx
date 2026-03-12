@@ -698,6 +698,25 @@ const Matching = () => {
     (r) => !r.vendor_extracted && !r.vendor_confirmed
   ).length;
 
+  // Inline filter helpers
+  const vendorLower = filterVendor.toLowerCase();
+  const empLower = filterEmployee.toLowerCase();
+
+  const matchesVendorR = (r: ReceiptRow) =>
+    !filterVendor || (rv(r).toLowerCase().includes(vendorLower));
+  const matchesEmpR = (r: ReceiptRow) =>
+    !filterEmployee || (r.employee?.full_name?.toLowerCase().includes(empLower) ?? false);
+  const matchesVendorTx = (tx: TxRow) =>
+    !filterVendor || ((tx.vendor_normalized ?? tx.vendor_raw ?? "").toLowerCase().includes(vendorLower));
+  const matchesEmpTx = (tx: TxRow) =>
+    !filterEmployee || (tx.user?.full_name?.toLowerCase().includes(empLower) ?? false);
+
+  const filteredAll = allReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+  const filteredReview = reviewReceipts.filter((r) => matchesVendorR(r));
+  const filteredUnmatched = unmatchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+  const filteredOrphans = orphanTxs.filter((tx) => matchesVendorTx(tx) && matchesEmpTx(tx));
+  const filteredMatched = matchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className="space-y-6">

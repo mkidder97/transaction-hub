@@ -141,6 +141,7 @@ interface ReceiptRow {
 
 interface TxRow {
   id: string;
+  user_id: string | null;
   vendor_raw: string | null;
   vendor_normalized: string | null;
   amount: number | null;

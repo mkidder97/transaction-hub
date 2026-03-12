@@ -175,7 +175,7 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
   doc.setFontSize(14);
   doc.text("Section 5: Category Breakdown", 14, 20);
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: 28,
     head: [["Category", "Receipt Count", "Total Amount"]],
     body: categories.map((c) => [c.name, String(c.count), amt(c.total)]),

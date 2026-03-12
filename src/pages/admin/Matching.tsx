@@ -1640,6 +1640,30 @@ const Matching = () => {
         </TabsContent>
       </Tabs>
 
+      {/* ── Placeholder Confirmation Dialog ─────────────────── */}
+      <AlertDialog open={!!placeholderTx} onOpenChange={(open) => !open && setPlaceholderTx(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>No receipt available?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will generate a placeholder document for{" "}
+              <span className="font-medium">{placeholderTx?.vendor_normalized ?? placeholderTx?.vendor_raw ?? "this transaction"}</span>{" "}
+              ({placeholderTx?.amount != null ? `$${Number(placeholderTx.amount).toFixed(2)}` : ""}
+              {placeholderTx?.transaction_date ? ` · ${placeholderTx.transaction_date}` : ""}).
+              The placeholder will be filed in place of a receipt and the transaction
+              will move to Matched. This confirms no physical receipt exists.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmPlaceholder} disabled={placeholderLoading}>
+              {placeholderLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Yes, generate placeholder
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* ── Search Modal ──────────────────────────────────────── */}
       <Dialog open={!!searchModal} onOpenChange={(open) => !open && setSearchModal(null)}>
         <DialogContent className="max-w-lg">

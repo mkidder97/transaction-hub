@@ -1,9 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export interface MatchCandidate {
+  transactionId: string;
+  vendor: string | null;
+  amount: number | null;
+  date: string | null;
+  score: number;
+}
+
 export interface MatchResult {
   transactionId: string | null;
   score: number;
   status: "matched" | "needs_review" | "no_match";
+  suggestions: MatchCandidate[];
 }
 
 /* ── Fuzzy vendor similarity (Dice coefficient on bigrams) ────────── */
@@ -37,13 +46,13 @@ export async function matchReceiptToTransactions(
   const { data: receipt, error: rErr } = await supabase
     .from("receipts")
     .select(
-      "id, user_id, amount_confirmed, amount_extracted, date_confirmed, date_extracted, vendor_confirmed, vendor_extracted",
+      "id, user_id, statement_period_id, amount_confirmed, amount_extracted, date_confirmed, date_extracted, vendor_confirmed, vendor_extracted",
     )
     .eq("id", receiptId)
     .single();
 
   if (rErr || !receipt)
-    return { transactionId: null, score: 0, status: "no_match" };
+    return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
 
   const rAmount =
     (receipt.amount_confirmed as number | null) ??
@@ -56,30 +65,38 @@ export async function matchReceiptToTransactions(
     (receipt.vendor_confirmed as string | null) ??
     (receipt.vendor_extracted as string | null);
 
-  if (rAmount == null)
-    return { transactionId: null, score: 0, status: "no_match" };
+  // Fix C: Don't hard-exit on missing amount — degrade gracefully
+  // If we have no amount AND no vendor AND no date, there's truly nothing to match on
+  if (rAmount == null && !rVendor && !rDate) {
+    return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
+  }
 
-  // Fetch unmatched transactions for the same user OR with no user assigned
+  // Fix B: Filter transactions by statement_period_id
+  const periodId = receipt.statement_period_id as string | null;
+
   let query = supabase
     .from("transactions")
     .select("id, amount, transaction_date, vendor_raw, vendor_normalized, user_id")
     .eq("match_status", "unmatched");
 
+  if (periodId) {
+    query = query.eq("statement_period_id", periodId);
+  }
+
   const { data: transactions } = await query.or(`user_id.eq.${receipt.user_id},user_id.is.null`);
 
   if (!transactions || transactions.length === 0)
-    return { transactionId: null, score: 0, status: "no_match" };
+    return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
 
-  let bestId: string | null = null;
-  let bestScore = 0;
+  const scored: MatchCandidate[] = [];
 
   for (const tx of transactions) {
     let score = 0;
     const txAmount = tx.amount as number | null;
     const txDateStr = tx.transaction_date as string | null;
 
-    // Amount scoring (max 0.5)
-    if (txAmount != null) {
+    // Amount scoring (max 0.5) — scores 0 if rAmount is null
+    if (rAmount != null && txAmount != null) {
       const diff = Math.abs(txAmount - rAmount);
       if (diff <= 0.01) {
         score += 0.5;
@@ -106,17 +123,29 @@ export async function matchReceiptToTransactions(
     const sim = vendorSimilarity(rVendor, txVendor);
     score += sim * 0.2;
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestId = tx.id;
-    }
+    scored.push({
+      transactionId: tx.id,
+      vendor: txVendor,
+      amount: txAmount,
+      date: txDateStr,
+      score,
+    });
   }
 
-  if (bestScore >= 0.7)
-    return { transactionId: bestId, score: bestScore, status: "matched" };
-  if (bestScore >= 0.4)
-    return { transactionId: bestId, score: bestScore, status: "needs_review" };
-  return { transactionId: null, score: bestScore, status: "no_match" };
+  // Sort descending by score
+  scored.sort((a, b) => b.score - a.score);
+  const top3 = scored.slice(0, 3).map((s) => ({
+    ...s,
+    score: Math.round(s.score * 100) / 100,
+  }));
+
+  const best = scored[0];
+
+  if (best.score >= 0.7)
+    return { transactionId: best.transactionId, score: best.score, status: "matched", suggestions: top3 };
+  if (best.score >= 0.4)
+    return { transactionId: best.transactionId, score: best.score, status: "needs_review", suggestions: top3 };
+  return { transactionId: null, score: best.score, status: "no_match", suggestions: top3 };
 }
 
 /* ── Run matching for an entire period ────────────────────────────── */
@@ -147,12 +176,14 @@ export async function runMatchingForPeriod(
     const result = await matchReceiptToTransactions(r.id);
 
     if (result.status === "matched" && result.transactionId) {
+      // Fix A: Set transaction_id, clear match_suggestions
       await supabase
         .from("receipts")
         .update({
           match_status: "matched",
           transaction_id: result.transactionId,
           match_confidence: result.score,
+          match_suggestions: null,
         })
         .eq("id", r.id);
 
@@ -160,18 +191,21 @@ export async function runMatchingForPeriod(
         .from("transactions")
         .update({
           match_status: "matched",
+          receipt_id: r.id,
           match_confidence: result.score,
         })
         .eq("id", result.transactionId);
 
       matched++;
-    } else if (result.status === "needs_review" && result.transactionId) {
+    } else if (result.status === "needs_review" && result.suggestions.length > 0) {
+      // Fix A: Write match_suggestions, do NOT set transaction_id
       await supabase
         .from("receipts")
         .update({
           match_status: "needs_review",
-          transaction_id: result.transactionId,
           match_confidence: result.score,
+          match_suggestions: result.suggestions,
+          transaction_id: null,
         })
         .eq("id", r.id);
 

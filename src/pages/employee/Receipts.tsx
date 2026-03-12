@@ -13,10 +13,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReceiptDetailPanel } from "@/components/employee/ReceiptDetailPanel";
 import { Receipt, FileText } from "lucide-react";
+import { useSignedUrl } from "@/hooks/useSignedUrl";
 
 interface ReceiptRow {
   id: string;
   photo_url: string | null;
+  storage_path: string | null;
   vendor_extracted: string | null;
   vendor_confirmed: string | null;
   amount_extracted: number | null;
@@ -30,7 +32,6 @@ interface ReceiptRow {
   match_confidence: number | null;
   flag_reason: string | null;
   notes: string | null;
-  storage_path: string | null;
   statement_period_id: string | null;
   transaction_id: string | null;
   created_at: string;
@@ -51,6 +52,18 @@ const statusColor: Record<string, string> = {
   approved: "bg-accent/15 text-accent",
   flagged: "bg-destructive/15 text-destructive",
 };
+
+function ReceiptListThumb({ storagePath }: { storagePath: string | null }) {
+  const url = useSignedUrl(storagePath);
+  if (!url) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <Receipt className="h-6 w-6 text-muted-foreground" />
+      </div>
+    );
+  }
+  return <img src={url} alt="Receipt" className="h-full w-full object-cover" />;
+}
 
 const EmployeeReceipts = () => {
   const { user } = useAuth();
@@ -176,17 +189,7 @@ const EmployeeReceipts = () => {
               <CardContent className="p-3 flex items-center gap-4">
                 {/* Thumbnail */}
                 <div className="h-14 w-14 rounded-md bg-muted flex-shrink-0 overflow-hidden">
-                  {r.photo_url ? (
-                    <img
-                      src={r.photo_url}
-                      alt="Receipt"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="h-full w-full flex items-center justify-center">
-                      <Receipt className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                  )}
+                  <ReceiptListThumb storagePath={r.storage_path} />
                 </div>
 
                 {/* Info */}

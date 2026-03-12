@@ -602,7 +602,7 @@ const ImportTransactions = () => {
                 >
                   Back to Mapping
                 </Button>
-                <Button className="gap-2" onClick={() => confirmImport(csvMapped, "csv", csvFilename)} disabled={csvImporting}>
+                <Button className="gap-2" onClick={() => confirmImport(csvMapped, "csv", csvFilename, csvStoragePath ? [csvStoragePath] : [])} disabled={csvImporting}>
                   {csvImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   Confirm Import ({csvMapped.length})
                 </Button>

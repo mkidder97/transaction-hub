@@ -171,18 +171,18 @@ function scoreBadgeClass(score: number): string {
 /* ── Receipt thumbnail helper (signed URL) ───────────────────────── */
 function ReceiptThumb({
   storagePath,
-  onClick,
+  onClickPath,
   size = 40,
   isPlaceholder = false,
 }: {
   storagePath: string | null;
-  onClick: (url: string, isPdf?: boolean) => void;
+  onClickPath: (path: string) => void;
   size?: number;
   isPlaceholder?: boolean;
 }) {
   const url = useSignedUrl(storagePath);
 
-  if (!storagePath || !url) {
+  if (!storagePath) {
     return (
       <div
         className="rounded bg-muted flex items-center justify-center"
@@ -198,10 +198,21 @@ function ReceiptThumb({
       <div
         className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
         style={{ width: size, height: size }}
-        onClick={() => onClick(url, true)}
+        onClick={() => onClickPath(storagePath)}
         title="View placeholder PDF"
       >
         <FileText className="h-4 w-4 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!url) {
+    return (
+      <div
+        className="rounded bg-muted flex items-center justify-center"
+        style={{ width: size, height: size }}
+      >
+        <ImageOff className="h-4 w-4 text-muted-foreground" />
       </div>
     );
   }
@@ -212,7 +223,7 @@ function ReceiptThumb({
       alt="Receipt"
       className="rounded object-cover cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
       style={{ width: size, height: size }}
-      onClick={() => onClick(url, false)}
+      onClick={() => onClickPath(storagePath)}
     />
   );
 }

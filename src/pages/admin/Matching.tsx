@@ -285,6 +285,10 @@ const Matching = () => {
   const [searchAmountMin, setSearchAmountMin] = useState("");
   const [searchAmountMax, setSearchAmountMax] = useState("");
 
+  // Inline filter bar state
+  const [filterVendor, setFilterVendor] = useState("");
+  const [filterEmployee, setFilterEmployee] = useState("");
+
   /* ── Fetch periods ──────────────────────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
@@ -694,6 +698,25 @@ const Matching = () => {
     (r) => !r.vendor_extracted && !r.vendor_confirmed
   ).length;
 
+  // Inline filter helpers
+  const vendorLower = filterVendor.toLowerCase();
+  const empLower = filterEmployee.toLowerCase();
+
+  const matchesVendorR = (r: ReceiptRow) =>
+    !filterVendor || (rv(r).toLowerCase().includes(vendorLower));
+  const matchesEmpR = (r: ReceiptRow) =>
+    !filterEmployee || (r.employee?.full_name?.toLowerCase().includes(empLower) ?? false);
+  const matchesVendorTx = (tx: TxRow) =>
+    !filterVendor || ((tx.vendor_normalized ?? tx.vendor_raw ?? "").toLowerCase().includes(vendorLower));
+  const matchesEmpTx = (tx: TxRow) =>
+    !filterEmployee || (tx.user?.full_name?.toLowerCase().includes(empLower) ?? false);
+
+  const filteredAll = allReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+  const filteredReview = reviewReceipts.filter((r) => matchesVendorR(r));
+  const filteredUnmatched = unmatchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+  const filteredOrphans = orphanTxs.filter((tx) => matchesVendorTx(tx) && matchesEmpTx(tx));
+  const filteredMatched = matchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+
   /* ── Render ─────────────────────────────────────────────────── */
   return (
     <div className="space-y-6">
@@ -755,10 +778,16 @@ const Matching = () => {
         {statCards.map((s) => (
           <Card
             key={s.label}
-            className="cursor-pointer transition-colors hover:border-primary/40"
+            className={`cursor-pointer transition-all hover:border-primary/40 ${
+              activeTab === s.tab
+                ? "ring-2 ring-primary border-primary shadow-sm"
+                : ""
+            }`}
             onClick={() => {
               setActiveTab(s.tab);
               setSearchParams({ tab: s.tab });
+              setFilterVendor("");
+              setFilterEmployee("");
             }}
           >
             <CardContent className="p-4 flex flex-col gap-1">
@@ -772,9 +801,40 @@ const Matching = () => {
         ))}
       </div>
 
-      <Separator />
+      {/* Filter / search bar */}
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground min-w-fit">
+          {statCards.find((s) => s.tab === activeTab)?.icon}
+          <span>{statCards.find((s) => s.tab === activeTab)?.label}</span>
+        </div>
+        <Separator orientation="vertical" className="h-6 hidden sm:block" />
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Filter by vendor…"
+            className="pl-8 h-8 text-sm"
+            value={filterVendor}
+            onChange={(e) => setFilterVendor(e.target.value)}
+          />
+        </div>
+        {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (
+          <div className="relative min-w-[140px] max-w-xs">
+            <Input
+              placeholder="Filter by employee…"
+              className="h-8 text-sm"
+              value={filterEmployee}
+              onChange={(e) => setFilterEmployee(e.target.value)}
+            />
+          </div>
+        )}
+        {(filterVendor || filterEmployee) && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterVendor(""); setFilterEmployee(""); }}>
+            Clear
+          </Button>
+        )}
+      </div>
 
-      {/* Tabs */}
+      {/* Tab content (no visible tab strip) */}
       <Tabs
         value={activeTab}
         onValueChange={(v) => {
@@ -782,30 +842,12 @@ const Matching = () => {
           setSearchParams({ tab: v });
         }}
       >
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all">
-            All Receipts{stats.total > 0 && ` (${stats.total})`}
-          </TabsTrigger>
-          <TabsTrigger value="needs-review">
-            Needs Review{stats.needsReview > 0 && ` (${stats.needsReview})`}
-          </TabsTrigger>
-          <TabsTrigger value="unmatched">
-            No Match Found{stats.unmatched > 0 && ` (${stats.unmatched})`}
-          </TabsTrigger>
-          <TabsTrigger value="no-receipt">
-            Tx Missing Receipt{stats.txWithoutReceipt > 0 && ` (${stats.txWithoutReceipt})`}
-          </TabsTrigger>
-          <TabsTrigger value="matched">Matched{stats.matched > 0 && ` (${stats.matched})`}</TabsTrigger>
-          <TabsTrigger value="duplicates">
-            Duplicates{duplicateGroups.length > 0 && ` (${duplicateGroups.length})`}
-          </TabsTrigger>
-        </TabsList>
 
         {/* ── Tab: All Receipts ────────────────────────────────── */}
         <TabsContent value="all">
           {allLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : allReceipts.length === 0 ? (
+          ) : filteredAll.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <Files className="h-10 w-10" />
@@ -829,7 +871,7 @@ const Matching = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allReceipts.map((r) => (
+                  {filteredAll.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
                         <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
@@ -877,7 +919,7 @@ const Matching = () => {
         <TabsContent value="needs-review">
           {reviewLoading ? (
             <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-lg" />)}</div>
-          ) : reviewReceipts.length === 0 ? (
+          ) : filteredReview.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />
@@ -886,7 +928,7 @@ const Matching = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {reviewReceipts.map((r) => {
+              {filteredReview.map((r) => {
                 const suggestions = (r.match_suggestions ?? []) as MatchSuggestion[];
                 const legacyTx = suggestions.length === 0 && r.transaction_id ? legacyTxCache[r.transaction_id] : null;
 
@@ -994,7 +1036,7 @@ const Matching = () => {
         <TabsContent value="unmatched">
           {unmatchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : unmatchedReceipts.length === 0 ? (
+          ) : filteredUnmatched.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />
@@ -1025,7 +1067,7 @@ const Matching = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {unmatchedReceipts.map((r) => {
+                    {filteredUnmatched.map((r) => {
                       const missingExtraction = !r.vendor_extracted && !r.vendor_confirmed;
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
@@ -1062,7 +1104,7 @@ const Matching = () => {
         <TabsContent value="no-receipt">
           {orphanLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : orphanTxs.length === 0 ? (
+          ) : filteredOrphans.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />
@@ -1083,7 +1125,7 @@ const Matching = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {orphanTxs.map((tx) => (
+                  {filteredOrphans.map((tx) => (
                     <TableRow key={tx.id}>
                       <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
                       <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>
@@ -1116,7 +1158,7 @@ const Matching = () => {
         <TabsContent value="matched">
           {matchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
-          ) : matchedReceipts.length === 0 ? (
+          ) : filteredMatched.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <FileX className="h-10 w-10" />
@@ -1141,7 +1183,7 @@ const Matching = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {matchedReceipts.map((r) => (
+                  {filteredMatched.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell>
                         <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />

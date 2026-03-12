@@ -375,6 +375,7 @@ const Matching = () => {
       .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name)`)
       .eq("statement_period_id", pid)
       .eq("match_status", "unmatched")
+      .or("duplicate_status.is.null,duplicate_status.neq.confirmed_duplicate")
       .order("created_at", { ascending: false });
     setUnmatchedReceipts((data as unknown as ReceiptRow[]) ?? []);
     setUnmatchedLoading(false);

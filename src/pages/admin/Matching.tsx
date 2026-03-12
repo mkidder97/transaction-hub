@@ -197,7 +197,7 @@ function ReceiptThumb({
       <div
         className="rounded bg-muted flex items-center justify-center cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
         style={{ width: size, height: size }}
-        onClick={() => window.open(url, "_blank")}
+        onClick={() => onClick(url)}
         title="View placeholder PDF"
       >
         <FileText className="h-4 w-4 text-muted-foreground" />
@@ -1452,7 +1452,7 @@ const Matching = () => {
                       <TableCell>
                         <ReceiptThumb
                           storagePath={r.storage_path}
-                          onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
+                          onClick={setLightboxUrl}
                           isPlaceholder={r.is_placeholder ?? false}
                         />
                       </TableCell>
@@ -1728,8 +1728,12 @@ const Matching = () => {
       {/* ── Image Lightbox ────────────────────────────────────── */}
       <Dialog open={!!lightboxUrl} onOpenChange={(open) => !open && setLightboxUrl(null)}>
         <DialogContent className="max-w-3xl p-2" aria-describedby={undefined}>
-          <DialogTitle className="sr-only">Receipt Image</DialogTitle>
-          <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+          <DialogTitle className="sr-only">Receipt Preview</DialogTitle>
+          {lightboxUrl?.includes(".pdf") ? (
+            <iframe src={lightboxUrl} className="w-full rounded-md" style={{ height: "80vh" }} title="Receipt PDF" />
+          ) : (
+            <img src={lightboxUrl ?? ""} alt="Receipt" className="w-full h-auto rounded-md max-h-[80vh] object-contain" />
+          )}
         </DialogContent>
       </Dialog>
 

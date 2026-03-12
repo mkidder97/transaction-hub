@@ -172,7 +172,7 @@ const ImportTransactions = () => {
   };
 
   // -- Shared import logic --
-  const confirmImport = useCallback(async (sourceRows: ParsedTransactionRow[], source: string, filename: string | null) => {
+  const confirmImport = useCallback(async (sourceRows: ParsedTransactionRow[], source: string, filename: string | null, filePaths?: string[]) => {
     if (!user || sourceRows.length === 0) return;
     const setImportingFn = source === "screenshot" ? setImporting : setCsvImporting;
     setImportingFn(true);
@@ -186,6 +186,7 @@ const ImportTransactions = () => {
           total_rows: sourceRows.length,
           status: "processing",
           imported_by: user.id,
+          file_paths: filePaths ?? [],
         })
         .select("id")
         .single();

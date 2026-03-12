@@ -145,10 +145,10 @@ const SubmitReceipt = () => {
         const publicUrl = urlData.publicUrl;
         updateItem(item.id, { storagePath, publicUrl, status: "extracting" });
 
-        // AI Vision extraction via edge function
+        // AI Vision extraction via edge function (pass categories for auto-categorization)
         const { data: extractData, error: extractError } = await supabase.functions.invoke(
           "extract-receipt",
-          { body: { imageUrl: publicUrl } },
+          { body: { imageUrl: publicUrl, categories } },
         );
 
         if (extractError) throw new Error(extractError.message || "AI extraction failed");
@@ -157,17 +157,21 @@ const SubmitReceipt = () => {
         const amountRaw = extractData?.amount_extracted ?? null;
         const dateRaw = extractData?.date_extracted ?? null;
         const confidence = extractData?.ai_confidence ?? 0;
+        const aiCategoryId = extractData?.suggested_category_id ?? "";
 
         // Vendor dictionary lookup
         let vendorName = vendorRaw;
-        let autoCategoryId = "";
+        let vendorCategoryId = "";
         if (vendorName) {
           const match = await lookupVendor(vendorName);
           if (match) {
             vendorName = match.canonical_name;
-            if (match.default_category_id) autoCategoryId = match.default_category_id;
+            if (match.default_category_id) vendorCategoryId = match.default_category_id;
           }
         }
+
+        // Category priority: AI suggestion > vendor default > empty
+        const autoCategoryId = aiCategoryId || vendorCategoryId;
 
         updateItem(item.id, {
           status: "ready",

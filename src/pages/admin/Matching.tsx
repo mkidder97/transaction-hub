@@ -1452,7 +1452,7 @@ const Matching = () => {
                       <TableCell>
                         <ReceiptThumb
                           storagePath={r.storage_path}
-                          onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
+                          onClick={setLightboxUrl}
                           isPlaceholder={r.is_placeholder ?? false}
                         />
                       </TableCell>

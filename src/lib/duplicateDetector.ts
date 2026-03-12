@@ -120,13 +120,17 @@ export async function detectDuplicatesForPeriod(
       if (sameEmployee && matchReasons.length > 0)
         matchReasons.push("Same employee");
 
+      const DATE_PROXIMITY_DAYS = 3;
+      const daysApart = dateDiffDays(aDate, bDate);
+      const datesProximate = daysApart <= DATE_PROXIMITY_DAYS;
+
       let confidence: "high" | "medium" | null = null;
 
       if (amountMatch && dateMatch && vendorMatch) {
         confidence = "high";
       } else if (amountMatch && dateMatch && sameEmployee) {
         confidence = "medium";
-      } else if (amountMatch && vendorMatch && sameEmployee) {
+      } else if (amountMatch && vendorMatch && sameEmployee && datesProximate) {
         confidence = "medium";
       }
 

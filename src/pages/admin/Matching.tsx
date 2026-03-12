@@ -73,6 +73,7 @@ import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
 import { runMatchingForPeriod } from "@/lib/matcher";
 import { useSignedUrl } from "@/hooks/useSignedUrl";
 import { detectDuplicatesForPeriod, DuplicateGroup } from "@/lib/duplicateDetector";
+import { generatePlaceholderReceipt } from "@/lib/generatePlaceholderReceipt";
 
 /* ── Types ───────────────────────────────────────────────────────── */
 

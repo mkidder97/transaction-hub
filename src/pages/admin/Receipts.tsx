@@ -93,10 +93,11 @@ const AdminReceipts = () => {
 
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
+    setSelected(new Set());
     let q = supabase
       .from("receipts")
       .select(
-        "id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, flag_reason, photo_url, created_at, employee:profiles!receipts_user_id_fkey(full_name, card_last_four), category:expense_categories(name), period:statement_periods(name), transaction:transactions!receipts_transaction_id_fkey(vendor_normalized, amount, transaction_date)"
+        "id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, flag_reason, photo_url, storage_path, created_at, employee:profiles!receipts_user_id_fkey(full_name, card_last_four), category:expense_categories(name), period:statement_periods(name), transaction:transactions!receipts_transaction_id_fkey(vendor_normalized, amount, transaction_date)"
       )
       .order("created_at", { ascending: false });
 

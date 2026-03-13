@@ -1422,6 +1422,19 @@ const Matching = () => {
                               <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
                                 <FileDown className="h-3 w-3 mr-1" /> Placeholder
                               </Button>
+                              {tx.user_id && (
+                                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openMessageDialog({
+                                  id: tx.id,
+                                  user_id: tx.user_id,
+                                  vendor: tx.vendor_normalized ?? tx.vendor_raw ?? "unknown",
+                                  amount: tx.amount,
+                                  date: tx.transaction_date,
+                                  employeeName: tx.user?.full_name ?? null,
+                                  transaction_id: tx.id,
+                                })}>
+                                  <MessageSquare className="h-3 w-3 mr-1" /> Message
+                                </Button>
+                              )}
                             </div>
                           )}
                         </TableCell>

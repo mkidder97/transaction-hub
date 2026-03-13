@@ -228,9 +228,29 @@ const AdminReceipts = () => {
           </SelectContent>
         </Select>
 
-        <Button variant="outline" className="gap-2 ml-auto" onClick={handleCsvExport}>
-          <Download className="h-4 w-4" /> Download CSV
-        </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={receipts.length === 0 || generating}
+            onClick={async () => {
+              setGenerating(true);
+              try {
+                await generateReceiptReviewPdf(periodId);
+              } catch (e: any) {
+                toast.error(e?.message || "Failed to generate PDF");
+              } finally {
+                setGenerating(false);
+              }
+            }}
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            Receipt Review PDF
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={handleCsvExport}>
+            <Download className="h-4 w-4" /> Download CSV
+          </Button>
+        </div>
       </div>
 
       {/* Table */}

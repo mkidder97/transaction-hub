@@ -86,15 +86,17 @@ const AdminDashboard = () => {
       // Fetch all receipts for stats + dept breakdown
       const { data: allReceipts } = await supabase
         .from("receipts")
-        .select("status, match_status, user_id, employee:profiles!receipts_user_id_fkey(department)")
+        .select("status, match_status, duplicate_status, user_id, employee:profiles!receipts_user_id_fkey(department)")
         .eq("statement_period_id", pid);
 
       if (allReceipts) {
+        const notDupe = allReceipts.filter((r) => r.duplicate_status !== "confirmed_duplicate");
         setStats({
           total: allReceipts.length,
-          approved: allReceipts.filter((r) => r.status === "approved").length,
-          flagged: allReceipts.filter((r) => r.status === "flagged").length,
-          unmatched: allReceipts.filter((r) => r.match_status === "unmatched").length,
+          matched: notDupe.filter((r) => ["matched", "auto_matched", "manual_match"].includes(r.match_status)).length,
+          needsReview: notDupe.filter((r) => r.match_status === "needs_review").length,
+          noMatch: notDupe.filter((r) => r.match_status === "unmatched").length,
+          txWithoutReceipt: 0, // filled after tx query
         });
 
         // Dept breakdown

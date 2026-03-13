@@ -172,9 +172,9 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {statCards.map((s) => (
-          <Card key={s.label} className={(s as any).link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => (s as any).link && navigate((s as any).link)}>
+          <Card key={s.label} className={s.link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => s.link && navigate(s.link)}>
             <CardContent className="p-4 flex flex-col gap-1">
               <div className={`flex items-center gap-2 ${s.color}`}>
                 {s.icon}

@@ -1152,6 +1152,7 @@ const Matching = () => {
               setFilterEmployee("");
               setSelectedUnmatched(new Set());
               setSelectedMatched(new Set());
+              setSelectedOrphans(new Set());
             }}
           >
             <CardContent className="p-4 flex flex-col gap-1">

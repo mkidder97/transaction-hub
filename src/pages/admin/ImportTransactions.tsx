@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp, Zap } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, CheckCircle, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 import { toast } from "sonner";
@@ -51,6 +51,14 @@ const FIELD_LABELS: Record<MappableField, string> = {
   amount: "Amount",
   card_last_four: "Card Last 4",
 };
+
+const AMEX_PRESET: Record<MappableField, string> = {
+  date: "Date",
+  vendor: "Description",
+  amount: "Amount",
+  card_last_four: "Account #",
+};
+const AMEX_COLUMNS = ["Date", "Description", "Amount", "Card Member", "Account #"];
 
 const ImportTransactions = () => {
   const { user } = useAuth();
@@ -80,6 +88,7 @@ const ImportTransactions = () => {
   const [csvStoragePath, setCsvStoragePath] = useState<string | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
+  const [isAmexPreset, setIsAmexPreset] = useState(false);
 
   // Import history state
   const [batches, setBatches] = useState<ImportBatch[]>([]);
@@ -314,6 +323,7 @@ const ImportTransactions = () => {
         setCsvFilename(null);
         setCsvStoragePath(null);
         setCsvMapping({ date: "", vendor: "", amount: "", card_last_four: "" });
+        setIsAmexPreset(false);
         if (csvRef.current) csvRef.current.value = "";
       }
     } catch (err: any) {
@@ -365,8 +375,14 @@ const ImportTransactions = () => {
       const cardIdx = lowerHeaders.findIndex((h) => h.includes("card"));
       if (cardIdx >= 0) guessed.card_last_four = headers[cardIdx];
       setCsvMapping(guessed);
+
+      // Detect Amex format and apply preset automatically
+      const isAmex = AMEX_COLUMNS.every(col => headers.includes(col));
+      setIsAmexPreset(isAmex);
+      if (isAmex) {
+        setCsvMapping(AMEX_PRESET);
+      }
     };
-    reader.readAsText(file);
   }, []);
 
   const applyMapping = useCallback(() => {
@@ -377,15 +393,22 @@ const ImportTransactions = () => {
         const idx = csvHeaders.indexOf(col);
         return idx >= 0 ? (vals[idx] ?? "") : "";
       };
-      return {
+      const row = {
         date: get("date"),
         vendor: get("vendor"),
         amount: get("amount").replace(/[$,]/g, ""),
         card_last_four: get("card_last_four"),
       };
+      // Amex Account # format is like "-XXXXX-XXXXX-X1234" or "3-41234-56781-1004"
+      // Extract last 4 digits only
+      if (isAmexPreset && row.card_last_four) {
+        const digits = row.card_last_four.replace(/\D/g, "");
+        row.card_last_four = digits.slice(-4);
+      }
+      return row;
     });
     setCsvMapped(mapped);
-  }, [csvRawRows, csvHeaders, csvMapping]);
+  }, [csvRawRows, csvHeaders, csvMapping, isAmexPreset]);
 
   // -- Shared editable table --
   const EditableTable = ({
@@ -520,6 +543,23 @@ const ImportTransactions = () => {
 
           {/* Column mapping UI */}
           {csvHeaders.length > 0 && csvMapped.length === 0 && (
+            <>
+              {isAmexPreset && (
+                <div className="rounded-md border border-accent/40 bg-accent/5 p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-accent shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Amex Business format detected</p>
+                      <p className="text-xs text-muted-foreground">
+                        Columns mapped automatically — click Apply Mapping to continue.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    Auto-mapped
+                  </Badge>
+                </div>
+              )}
             <Card>
               <CardContent className="p-4 space-y-4">
                 <h3 className="text-sm font-semibold">Map CSV Columns</h3>
@@ -588,6 +628,7 @@ const ImportTransactions = () => {
                 </Button>
               </CardContent>
             </Card>
+            </>
           )}
 
           {/* Mapped preview + confirm */}

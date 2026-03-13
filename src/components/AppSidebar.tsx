@@ -45,6 +45,7 @@ const adminItems = [
   { title: "Matching", url: "/admin/matching", icon: GitMerge },
   { title: "Settings", url: "/admin/settings", icon: Settings },
   { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Messages", url: "/employee/messages", icon: MessageSquare },
 ];
 
 const adminExpenseItems = [

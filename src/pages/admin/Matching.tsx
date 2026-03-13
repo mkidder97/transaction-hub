@@ -1444,10 +1444,35 @@ const Matching = () => {
             </Card>
           ) : (
             <div className="space-y-1">
+              {/* Bulk action bar for orphans */}
+              {selectedOrphans.size > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 mb-2">
+                  <span className="text-sm font-medium">{selectedOrphans.size} selected</span>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openBulkMessageDialog}>
+                    <MessageSquare className="h-3 w-3" /> Message Selected
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedOrphans(new Set())}>
+                    Clear
+                  </Button>
+                </div>
+              )}
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={pagedOrphans.length > 0 && pagedOrphans.every((tx) => selectedOrphans.has(tx.id))}
+                          onCheckedChange={() => {
+                            const allSelected = pagedOrphans.every((tx) => selectedOrphans.has(tx.id));
+                            if (allSelected) {
+                              setSelectedOrphans(new Set());
+                            } else {
+                              setSelectedOrphans(new Set(pagedOrphans.map((tx) => tx.id)));
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead>Employee</TableHead>
                       <TableHead>Vendor</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
@@ -1459,6 +1484,12 @@ const Matching = () => {
                   <TableBody>
                     {pagedOrphans.map((tx) => (
                       <TableRow key={tx.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedOrphans.has(tx.id)}
+                            onCheckedChange={() => toggleSelect(tx.id, selectedOrphans, setSelectedOrphans)}
+                          />
+                        </TableCell>
                         <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
                         <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{fmt(tx.amount)}</TableCell>

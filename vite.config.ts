@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => ({
           vendor: ["react", "react-dom", "react-router-dom"],
           supabase: ["@supabase/supabase-js"],
           pdf: ["jspdf", "jspdf-autotable"],
+          excel: ["xlsx"],
+          zip: ["jszip"],
           ui: ["@radix-ui/react-dialog", "@radix-ui/react-tabs", "@radix-ui/react-select", "@radix-ui/react-dropdown-menu"],
         },
       },

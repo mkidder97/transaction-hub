@@ -62,7 +62,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [periodName, setPeriodName] = useState<string | null>(null);
-  const [stats, setStats] = useState<StatCards>({ total: 0, approved: 0, flagged: 0, unmatched: 0 });
+  const [stats, setStats] = useState<StatCards>({ total: 0, matched: 0, needsReview: 0, noMatch: 0, txWithoutReceipt: 0 });
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
   const [unmatchedTxs, setUnmatchedTxs] = useState<UnmatchedTx[]>([]);
   const [deptRows, setDeptRows] = useState<DeptRow[]>([]);

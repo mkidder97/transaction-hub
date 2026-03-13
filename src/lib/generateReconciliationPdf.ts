@@ -3,7 +3,7 @@ import autoTable from "jspdf-autotable";
 
 import { supabase } from "@/integrations/supabase/client";
 
-export async function generateReconciliationPdf(periodId: string): Promise<void> {
+export async function generateReconciliationPdf(periodId: string, userId?: string): Promise<void> {
   // Fetch period info
   const { data: period } = await supabase
     .from("statement_periods")
@@ -13,21 +13,36 @@ export async function generateReconciliationPdf(periodId: string): Promise<void>
 
   if (!period) throw new Error("Period not found");
 
+  // Fetch employee name for filename if filtered
+  let employeeName = "";
+  if (userId) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .single();
+    employeeName = profile?.full_name?.replace(/\s+/g, "-") ?? "employee";
+  }
+
   // Fetch all receipts with joins
-  const { data: receipts } = await supabase
+  let receiptsQuery = supabase
     .from("receipts")
     .select(
       "id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, flag_reason, category_id, user_id, transaction_id, employee:profiles!receipts_user_id_fkey(full_name), category:expense_categories(name), transaction:transactions!receipts_transaction_id_fkey(vendor_normalized, vendor_raw, amount, transaction_date)"
     )
     .eq("statement_period_id", periodId);
+  if (userId) receiptsQuery = receiptsQuery.eq("user_id", userId);
+  const { data: receipts } = await receiptsQuery;
 
-  // Fetch ALL transactions for this period (separate query — Section 3 needs unmatched transactions, NOT receipts)
-  const { data: allTransactions } = await supabase
+  // Fetch ALL transactions for this period
+  let txQuery = supabase
     .from("transactions")
     .select(
       "id, vendor_raw, vendor_normalized, amount, transaction_date, card_last_four, match_status, user:profiles!transactions_user_id_fkey(full_name)"
     )
     .eq("statement_period_id", periodId);
+  if (userId) txQuery = txQuery.eq("user_id", userId);
+  const { data: allTransactions } = await txQuery;
 
   const r = receipts ?? [];
   const txs = allTransactions ?? [];

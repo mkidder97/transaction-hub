@@ -39,14 +39,14 @@ const Messages = () => {
   const fetchMessages = async () => {
     if (!user) return;
     setLoading(true);
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("receipt_messages")
       .select(
         "id, message, is_read, created_at, receipt_id, transaction_id, sender:profiles!receipt_messages_sender_id_fkey(full_name), transaction:transactions!receipt_messages_transaction_id_fkey(vendor_normalized, vendor_raw, amount, transaction_date)"
       )
       .eq("recipient_id", user.id)
       .order("created_at", { ascending: false });
-    setMessages((data as unknown as MessageRow[]) ?? []);
+    setMessages((data as MessageRow[]) ?? []);
     setLoading(false);
   };
 
@@ -56,7 +56,7 @@ const Messages = () => {
   }, [user]);
 
   const markRead = async (id: string) => {
-    await supabase
+    await (supabase as any)
       .from("receipt_messages")
       .update({ is_read: true })
       .eq("id", id);

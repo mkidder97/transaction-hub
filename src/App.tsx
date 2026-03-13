@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 const EmployeeReceipts = lazy(() => import("@/pages/employee/Receipts"));
 const SubmitReceipt = lazy(() => import("@/pages/employee/SubmitReceipt"));
 const EmployeeTransactions = lazy(() => import("@/pages/employee/Transactions"));
+const EmployeeMessages = lazy(() => import("@/pages/employee/Messages"));
 
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminReceipts = lazy(() => import("@/pages/admin/Receipts"));

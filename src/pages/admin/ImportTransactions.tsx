@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Upload, Loader2, ScanSearch, Check, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp, Zap } from "lucide-react";
+import { Upload, Loader2, ScanSearch, Check, CheckCircle, Trash2, ImageIcon, History, Eye, X, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
 import { toast } from "sonner";

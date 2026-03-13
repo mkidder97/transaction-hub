@@ -357,6 +357,12 @@ const Matching = () => {
   // Bulk selection
   const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set());
   const [selectedMatched, setSelectedMatched] = useState<Set<string>>(new Set());
+  const [selectedOrphans, setSelectedOrphans] = useState<Set<string>>(new Set());
+
+  // Bulk message dialog
+  const [bulkMessageTargets, setBulkMessageTargets] = useState<MessageTarget[]>([]);
+  const [bulkMessageText, setBulkMessageText] = useState("");
+  const [sendingBulkMessage, setSendingBulkMessage] = useState(false);
 
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);

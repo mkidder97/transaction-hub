@@ -318,8 +318,7 @@ const Reconciliation = () => {
           <CardContent className="p-4 text-sm flex items-center gap-4 flex-wrap">
             <span className="font-semibold">Last Run:</span>
             <span className="text-accent font-medium">Matched: {lastResult.matched}</span>
-            <span className="text-warning font-medium">Needs Review: {lastResult.needs_review}</span>
-            <span className="text-muted-foreground font-medium">No Match: {lastResult.skipped}</span>
+            <span className="text-muted-foreground font-medium">No Match: {lastResult.noMatch}</span>
           </CardContent>
         </Card>
       )}

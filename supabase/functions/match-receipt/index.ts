@@ -101,27 +101,23 @@ serve(async (req) => {
 
       if (!receipts || receipts.length === 0) {
         return new Response(
-          JSON.stringify({ total: 0, autoMatched: 0, needsReview: 0, noMatch: 0 }),
+          JSON.stringify({ total: 0, autoMatched: 0, noMatch: 0 }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       let autoMatched = 0;
-      let needsReview = 0;
       let noMatch = 0;
 
       for (const r of receipts) {
-        // Small delay to avoid overwhelming the DB
         await new Promise((resolve) => setTimeout(resolve, 100));
-
         const result = await matchSingleReceipt(sb, r.id);
         if (result.status === "auto_matched") autoMatched++;
-        else if (result.status === "needs_review") needsReview++;
         else noMatch++;
       }
 
       return new Response(
-        JSON.stringify({ total: receipts.length, autoMatched, needsReview, noMatch }),
+        JSON.stringify({ total: receipts.length, autoMatched, noMatch }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -153,7 +149,6 @@ async function matchSingleReceipt(
   sb: ReturnType<typeof createClient>,
   receiptId: string,
 ) {
-  // Fetch receipt
   const { data: receipt, error: rErr } = await sb
     .from("receipts")
     .select("id, user_id, statement_period_id, amount_confirmed, amount_extracted, date_confirmed, date_extracted, vendor_confirmed, vendor_extracted")
@@ -184,7 +179,7 @@ async function matchSingleReceipt(
     if (!isNaN(parsed)) threshold = parsed;
   }
 
-  // Fetch unmatched transactions — try user-scoped first, fall back to all
+  // Fetch unmatched transactions
   let transactions: any[] = [];
 
   if (receipt.user_id && receipt.statement_period_id) {
@@ -197,7 +192,6 @@ async function matchSingleReceipt(
     transactions = data ?? [];
   }
 
-  // Fall back to all unmatched in period if no user-scoped matches
   if (transactions.length === 0 && receipt.statement_period_id) {
     const { data } = await sb
       .from("transactions")
@@ -211,7 +205,7 @@ async function matchSingleReceipt(
     return { receiptId, status: "no_match", score: 0 };
   }
 
-  // Score all candidates (drop rows with explicit date mismatch >3 days)
+  // Score all candidates
   const scored = transactions
     .map((tx: any) => ({
       transactionId: tx.id,
@@ -254,28 +248,23 @@ async function matchSingleReceipt(
     return { receiptId, status: "auto_matched", transactionId: best.transactionId, score: best.score };
   }
 
-  if (best.score >= 0.6) {
-    // Needs review — store top 3 candidates
-    const top3 = scored.slice(0, 3).map((s: any) => ({
-      transactionId: s.transactionId,
-      vendor: s.vendor,
-      amount: s.amount,
-      date: s.date,
-      score: Math.round(s.score * 100) / 100,
-    }));
+  // No match — store top 3 suggestions for manual "Find Transaction"
+  const top3 = scored.slice(0, 3).map((s: any) => ({
+    transactionId: s.transactionId,
+    vendor: s.vendor,
+    amount: s.amount,
+    date: s.date,
+    score: Math.round(s.score * 100) / 100,
+  }));
 
-    await sb
-      .from("receipts")
-      .update({
-        match_suggestions: top3,
-        match_status: "needs_review",
-        match_confidence: best.score,
-      })
-      .eq("id", receiptId);
+  await sb
+    .from("receipts")
+    .update({
+      match_suggestions: top3,
+      match_status: "unmatched",
+      match_confidence: null,
+    })
+    .eq("id", receiptId);
 
-    return { receiptId, status: "needs_review", suggestions: top3, score: best.score };
-  }
-
-  // No match
-  return { receiptId, status: "no_match", score: best.score };
+  return { receiptId, status: "no_match", suggestions: top3, score: best.score };
 }

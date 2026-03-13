@@ -11,16 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Receipt, CheckCircle, Flag, FileX, Clock, Search, AlertTriangle } from "lucide-react";
+import { Receipt, CheckCircle, Flag, FileX, Clock, Search, AlertTriangle, Copy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 interface StatCards {
   total: number;
   matched: number;
-  needsReview: number;
   noMatch: number;
   txWithoutReceipt: number;
+  duplicates: number;
 }
 
 interface RecentReceipt {
@@ -51,6 +51,13 @@ interface DeptRow {
   pending: number;
 }
 
+interface EmployeeRow {
+  name: string;
+  total: number;
+  matched: number;
+  unmatched: number;
+}
+
 const statusColor: Record<string, string> = {
   pending: "bg-muted text-muted-foreground",
   reviewed: "bg-primary/15 text-primary",
@@ -62,10 +69,12 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [periodName, setPeriodName] = useState<string | null>(null);
-  const [stats, setStats] = useState<StatCards>({ total: 0, matched: 0, needsReview: 0, noMatch: 0, txWithoutReceipt: 0 });
+  const [stats, setStats] = useState<StatCards>({ total: 0, matched: 0, noMatch: 0, txWithoutReceipt: 0, duplicates: 0 });
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
   const [unmatchedTxs, setUnmatchedTxs] = useState<UnmatchedTx[]>([]);
   const [deptRows, setDeptRows] = useState<DeptRow[]>([]);
+  const [employeeRows, setEmployeeRows] = useState<EmployeeRow[]>([]);
+  const [empSort, setEmpSort] = useState<"total" | "unmatched">("unmatched");
 
   useEffect(() => {
     const load = async () => {
@@ -83,20 +92,21 @@ const AdminDashboard = () => {
       setPeriodName(period.name);
       const pid = period.id;
 
-      // Fetch all receipts for stats + dept breakdown
+      // Fetch all receipts for stats + dept breakdown + employee summary
       const { data: allReceipts } = await supabase
         .from("receipts")
-        .select("status, match_status, duplicate_status, user_id, employee:profiles!receipts_user_id_fkey(department)")
+        .select("status, match_status, duplicate_status, user_id, employee:profiles!receipts_user_id_fkey(full_name, department)")
         .eq("statement_period_id", pid);
 
       if (allReceipts) {
         const notDupe = allReceipts.filter((r) => r.duplicate_status !== "confirmed_duplicate");
+        const dupeCount = allReceipts.filter((r) => r.duplicate_status === "suspected").length;
         setStats({
           total: allReceipts.length,
           matched: notDupe.filter((r) => ["matched", "auto_matched", "manual_match"].includes(r.match_status)).length,
-          needsReview: notDupe.filter((r) => r.match_status === "needs_review").length,
           noMatch: notDupe.filter((r) => r.match_status === "unmatched").length,
           txWithoutReceipt: 0, // filled after tx query
+          duplicates: dupeCount,
         });
 
         // Dept breakdown
@@ -114,6 +124,20 @@ const AdminDashboard = () => {
             .map(([department, d]) => ({ department, ...d }))
             .sort((a, b) => b.total - a.total),
         );
+
+        // Employee summary
+        const empMap: Record<string, { name: string; total: number; matched: number; unmatched: number }> = {};
+        for (const r of allReceipts) {
+          const empName = (r.employee as any)?.full_name ?? "Unknown";
+          if (!empMap[empName]) empMap[empName] = { name: empName, total: 0, matched: 0, unmatched: 0 };
+          empMap[empName].total++;
+          if (["matched", "auto_matched", "manual_match"].includes(r.match_status)) {
+            empMap[empName].matched++;
+          } else if (r.match_status === "unmatched" && r.duplicate_status !== "confirmed_duplicate") {
+            empMap[empName].unmatched++;
+          }
+        }
+        setEmployeeRows(Object.values(empMap));
       }
 
       // Recent receipts
@@ -141,12 +165,16 @@ const AdminDashboard = () => {
     load();
   }, []);
 
+  const sortedEmployees = [...employeeRows].sort((a, b) =>
+    empSort === "unmatched" ? b.unmatched - a.unmatched : b.total - a.total
+  );
+
   const statCards = [
     { label: "Total Receipts", value: stats.total, icon: <Receipt className="h-5 w-5" />, color: "text-foreground" },
     { label: "Matched", value: stats.matched, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent", link: "/admin/matching?tab=matched" },
-    { label: "Needs Review", value: stats.needsReview, icon: <Search className="h-5 w-5" />, color: "text-primary", link: "/admin/matching?tab=needs-review" },
     { label: "No Match", value: stats.noMatch, icon: <FileX className="h-5 w-5" />, color: "text-destructive", link: "/admin/matching?tab=unmatched" },
-    { label: "Tx w/o Receipt", value: stats.txWithoutReceipt, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=unmatched-tx" },
+    { label: "Tx w/o Receipt", value: stats.txWithoutReceipt, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=no-receipt" },
+    { label: "Duplicates", value: stats.duplicates, icon: <Copy className="h-5 w-5" />, color: "text-orange-500", link: "/admin/matching?tab=duplicates" },
   ];
 
   if (loading) {
@@ -172,7 +200,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {statCards.map((s) => (
           <Card key={s.label} className={s.link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => s.link && navigate(s.link)}>
             <CardContent className="p-4 flex flex-col gap-1">
@@ -261,6 +289,55 @@ const AdminDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* By Employee */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold">By Employee</CardTitle>
+            <div className="flex gap-1">
+              <button
+                className={`text-[11px] px-2 py-0.5 rounded ${empSort === "unmatched" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => setEmpSort("unmatched")}
+              >
+                By Missing
+              </button>
+              <button
+                className={`text-[11px] px-2 py-0.5 rounded ${empSort === "total" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => setEmpSort("total")}
+              >
+                By Total
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {sortedEmployees.length === 0 ? (
+            <p className="text-sm text-muted-foreground px-4 pb-4">No data.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Employee</TableHead>
+                  <TableHead className="text-right">Submitted</TableHead>
+                  <TableHead className="text-right">Matched</TableHead>
+                  <TableHead className="text-right">Unmatched</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedEmployees.map((e) => (
+                  <TableRow key={e.name}>
+                    <TableCell className="text-sm font-medium">{e.name}</TableCell>
+                    <TableCell className="text-sm text-right">{e.total}</TableCell>
+                    <TableCell className="text-sm text-right text-accent">{e.matched}</TableCell>
+                    <TableCell className="text-sm text-right text-destructive">{e.unmatched}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* By Department */}
       <Card>

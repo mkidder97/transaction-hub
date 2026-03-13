@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -69,6 +70,8 @@ import {
   Copy,
   FileDown,
   FileText,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
@@ -100,7 +103,6 @@ interface Stats {
   total: number;
   matched: number;
   autoMatched: number;
-  needsReview: number;
   unmatched: number;
   txWithoutReceipt: number;
 }
@@ -156,15 +158,40 @@ interface TxRow {
 interface BulkResult {
   total: number;
   autoMatched: number;
-  needsReview: number;
   noMatch: number;
 }
+
+const PAGE_SIZE = 20;
 
 /* ── Score badge color ───────────────────────────────────────────── */
 function scoreBadgeClass(score: number): string {
   if (score >= 0.85) return "bg-accent/15 text-accent";
   if (score >= 0.7) return "bg-warning/15 text-warning";
   return "bg-destructive/15 text-destructive";
+}
+
+/* ── Pagination component ────────────────────────────────────────── */
+function TablePagination({ page, totalItems, onPageChange }: { page: number; totalItems: number; onPageChange: (p: number) => void }) {
+  const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex items-center justify-between px-2 py-3">
+      <span className="text-xs text-muted-foreground">
+        Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalItems)} of {totalItems}
+      </span>
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page === 0} onClick={() => onPageChange(page - 1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <span className="text-xs text-muted-foreground px-2">
+          {page + 1} / {totalPages}
+        </span>
+        <Button variant="outline" size="sm" className="h-7 w-7 p-0" disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /* ── Receipt thumbnail helper (signed URL) ───────────────────────── */
@@ -216,36 +243,6 @@ function ReceiptThumb({
   );
 }
 
-/* ── Review card thumbnail (signed URL) ──────────────────────────── */
-function ReviewCardThumb({
-  storagePath,
-  onOpen,
-}: {
-  storagePath: string | null;
-  onOpen: (url: string) => void;
-}) {
-  const url = useSignedUrl(storagePath);
-  if (!storagePath || !url) return null;
-  return (
-    <div className="mb-2">
-      <img
-        src={url}
-        alt="Receipt"
-        className="w-full max-h-[120px] object-contain rounded cursor-pointer hover:ring-2 ring-primary/40 transition-shadow"
-        onClick={() => onOpen(url)}
-      />
-      <Button
-        size="sm"
-        variant="ghost"
-        className="text-xs h-6 mt-1 gap-1 text-muted-foreground"
-        onClick={() => onOpen(url)}
-      >
-        <ExternalLink className="h-3 w-3" /> View Receipt
-      </Button>
-    </div>
-  );
-}
-
 /* ── Extracted indicator ─────────────────────────────────────────── */
 function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
   const hasData = !!(receipt.vendor_extracted || receipt.vendor_confirmed);
@@ -272,7 +269,7 @@ function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialTab = searchParams.get("tab") || "needs-review";
+  const initialTab = searchParams.get("tab") || "unmatched";
 
   const [periods, setPeriods] = useState<Period[]>([]);
   const [periodId, setPeriodId] = useState("");
@@ -280,7 +277,6 @@ const Matching = () => {
     total: 0,
     matched: 0,
     autoMatched: 0,
-    needsReview: 0,
     unmatched: 0,
     txWithoutReceipt: 0,
   });
@@ -295,10 +291,6 @@ const Matching = () => {
   // All receipts
   const [allReceipts, setAllReceipts] = useState<ReceiptRow[]>([]);
   const [allLoading, setAllLoading] = useState(false);
-
-  // Needs Review
-  const [reviewReceipts, setReviewReceipts] = useState<ReceiptRow[]>([]);
-  const [reviewLoading, setReviewLoading] = useState(false);
 
   // Unmatched
   const [unmatchedReceipts, setUnmatchedReceipts] = useState<ReceiptRow[]>([]);
@@ -315,9 +307,6 @@ const Matching = () => {
   // Duplicates
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [duplicatesLoading, setDuplicatesLoading] = useState(false);
-
-  // Legacy tx fetch cache for needs_review cards with transaction_id but no suggestions
-  const [legacyTxCache, setLegacyTxCache] = useState<Record<string, { id: string; vendor_normalized: string | null; vendor_raw: string | null; amount: number | null; transaction_date: string | null }>>({});
 
   // Placeholder confirmation
   const [placeholderTx, setPlaceholderTx] = useState<TxRow | null>(null);
@@ -341,11 +330,20 @@ const Matching = () => {
   const [flagReason, setFlagReason] = useState("");
   const [flagSubmitting, setFlagSubmitting] = useState(false);
 
+  // Pagination state per tab
+  const [pageAll, setPageAll] = useState(0);
+  const [pageUnmatched, setPageUnmatched] = useState(0);
+  const [pageMatched, setPageMatched] = useState(0);
+  const [pageOrphans, setPageOrphans] = useState(0);
+
+  // Bulk selection
+  const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set());
+  const [selectedMatched, setSelectedMatched] = useState<Set<string>>(new Set());
+
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   useEffect(() => {
-    // Fetch periods and employees in parallel
     Promise.all([
       supabase
         .from("statement_periods")
@@ -405,7 +403,6 @@ const Matching = () => {
       total: r.length,
       matched: r.filter((x) => x.match_status === "auto_matched" || x.match_status === "manual_match" || x.match_status === "matched").length,
       autoMatched: r.filter((x) => x.match_status === "auto_matched").length,
-      needsReview: r.filter((x) => x.match_status === "needs_review").length,
       unmatched: r.filter((x: any) => x.match_status === "unmatched" && x.duplicate_status !== "confirmed_duplicate").length,
       txWithoutReceipt: t.filter((x) => x.match_status === "unmatched").length,
     });
@@ -424,18 +421,6 @@ const Matching = () => {
       .order("created_at", { ascending: false });
     setAllReceipts((data as unknown as ReceiptRow[]) ?? []);
     setAllLoading(false);
-  }, []);
-
-  const fetchReview = useCallback(async (pid: string) => {
-    setReviewLoading(true);
-    const { data } = await supabase
-      .from("receipts")
-      .select(`${selectFields}, employee:profiles!receipts_user_id_fkey(full_name)`)
-      .eq("statement_period_id", pid)
-      .eq("match_status", "needs_review")
-      .order("match_confidence", { ascending: false });
-    setReviewReceipts((data as unknown as ReceiptRow[]) ?? []);
-    setReviewLoading(false);
   }, []);
 
   const fetchUnmatched = useCallback(async (pid: string) => {
@@ -482,44 +467,39 @@ const Matching = () => {
     setDuplicatesLoading(false);
   }, []);
 
+  /* ── Targeted refresh helpers ──────────────────────────────── */
   const refreshAll = useCallback((pid: string) => {
     fetchStats(pid);
     fetchAll(pid);
-    fetchReview(pid);
     fetchUnmatched(pid);
     fetchOrphans(pid);
     fetchMatched(pid);
     fetchDuplicates(pid);
-  }, [fetchStats, fetchAll, fetchReview, fetchUnmatched, fetchOrphans, fetchMatched, fetchDuplicates]);
+  }, [fetchStats, fetchAll, fetchUnmatched, fetchOrphans, fetchMatched, fetchDuplicates]);
+
+  const refreshAfterMatch = useCallback((pid: string) => {
+    fetchStats(pid);
+    fetchUnmatched(pid);
+    fetchMatched(pid);
+    fetchOrphans(pid);
+    fetchAll(pid);
+  }, [fetchStats, fetchUnmatched, fetchMatched, fetchOrphans, fetchAll]);
+
+  const refreshAfterFlag = useCallback((pid: string) => {
+    fetchStats(pid);
+    fetchAll(pid);
+  }, [fetchStats, fetchAll]);
+
+  const refreshAfterDuplicate = useCallback((pid: string) => {
+    fetchStats(pid);
+    fetchDuplicates(pid);
+    fetchUnmatched(pid);
+    fetchAll(pid);
+  }, [fetchStats, fetchDuplicates, fetchUnmatched, fetchAll]);
 
   useEffect(() => {
     if (periodId) refreshAll(periodId);
   }, [periodId, refreshAll]);
-
-  // Fetch legacy transactions for needs_review cards with transaction_id but no suggestions
-  useEffect(() => {
-    const legacyReceipts = reviewReceipts.filter(
-      (r) => (!r.match_suggestions || (r.match_suggestions as MatchSuggestion[]).length === 0) && r.transaction_id
-    );
-    if (legacyReceipts.length === 0) return;
-
-    const txIds = legacyReceipts.map((r) => r.transaction_id!).filter((id) => !legacyTxCache[id]);
-    if (txIds.length === 0) return;
-
-    supabase
-      .from("transactions")
-      .select("id, vendor_normalized, vendor_raw, amount, transaction_date")
-      .in("id", txIds)
-      .then(({ data }) => {
-        if (data) {
-          const cache: typeof legacyTxCache = {};
-          for (const tx of data) {
-            cache[tx.id] = tx as any;
-          }
-          setLegacyTxCache((prev) => ({ ...prev, ...cache }));
-        }
-      });
-  }, [reviewReceipts]);
 
   /* ── Run auto-match ─────────────────────────────────────────── */
   const handleRunMatch = async () => {
@@ -529,10 +509,9 @@ const Matching = () => {
     try {
       const result = await runMatchingForPeriod(periodId);
       setBulkResult({
-        total: result.matched + result.needs_review + result.skipped,
+        total: result.matched + result.noMatch,
         autoMatched: result.matched,
-        needsReview: result.needs_review,
-        noMatch: result.skipped,
+        noMatch: result.noMatch,
       });
       toast.success("Auto-matching complete!");
       refreshAll(periodId);
@@ -567,7 +546,7 @@ const Matching = () => {
       return;
     }
     toast.success("Match confirmed");
-    refreshAll(periodId);
+    refreshAfterMatch(periodId);
   };
 
   /* ── Mark as no match ───────────────────────────────────────── */
@@ -577,7 +556,7 @@ const Matching = () => {
       .update({ match_status: "unmatched", match_suggestions: null, match_confidence: null })
       .eq("id", receiptId);
     toast.success("Moved to unmatched");
-    refreshAll(periodId);
+    refreshAfterMatch(periodId);
   };
 
   /* ── Unmatch ────────────────────────────────────────────────── */
@@ -593,7 +572,7 @@ const Matching = () => {
         .eq("id", txId);
     }
     toast.success("Unmatched");
-    refreshAll(periodId);
+    refreshAfterMatch(periodId);
   };
 
   /* ── Flag tx as no receipt needed ───────────────────────────── */
@@ -603,7 +582,7 @@ const Matching = () => {
       .update({ match_status: "no_receipt", notes: "Flagged as no receipt needed" })
       .eq("id", txId);
     toast.success("Flagged");
-    refreshAll(periodId);
+    refreshAfterMatch(periodId);
   };
 
   /* ── Duplicate handlers ─────────────────────────────────────── */
@@ -616,7 +595,7 @@ const Matching = () => {
       } as any)
       .eq("id", duplicateId);
     toast.success("Marked as duplicate");
-    refreshAll(periodId);
+    refreshAfterDuplicate(periodId);
   };
 
   const dismissDuplicate = async (duplicateId: string, originalId: string) => {
@@ -625,7 +604,7 @@ const Matching = () => {
       .update({ duplicate_status: "not_duplicate" } as any)
       .in("id", [duplicateId, originalId]);
     toast.success("Dismissed — kept both");
-    refreshAll(periodId);
+    refreshAfterDuplicate(periodId);
   };
 
   /* ── Placeholder handler ────────────────────────────────────── */
@@ -681,7 +660,7 @@ const Matching = () => {
 
       toast.success("Placeholder filed — transaction moved to Matched");
       setPlaceholderTx(null);
-      refreshAll(periodId);
+      refreshAfterMatch(periodId);
     } catch (err: any) {
       toast.error(err.message ?? "Failed to create placeholder");
     } finally {
@@ -700,7 +679,7 @@ const Matching = () => {
       return;
     }
     toast.success("Receipt approved");
-    refreshAll(periodId);
+    refreshAfterFlag(periodId);
   };
 
   /* ── Approve All matched receipts ───────────────────────────── */
@@ -726,7 +705,39 @@ const Matching = () => {
       return;
     }
     toast.success(`${toApprove.length} receipt${toApprove.length === 1 ? "" : "s"} approved`);
-    refreshAll(periodId);
+    refreshAfterFlag(periodId);
+  };
+
+  /* ── Bulk approve selected ──────────────────────────────────── */
+  const handleBulkApprove = async (ids: Set<string>, clearSelection: () => void) => {
+    if (ids.size === 0) return;
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "approved", reviewed_at: new Date().toISOString() })
+      .in("id", Array.from(ids));
+    if (error) {
+      toast.error("Failed to approve selected");
+      return;
+    }
+    toast.success(`${ids.size} receipt${ids.size === 1 ? "" : "s"} approved`);
+    clearSelection();
+    refreshAfterFlag(periodId);
+  };
+
+  /* ── Bulk flag selected ─────────────────────────────────────── */
+  const handleBulkFlag = async (ids: Set<string>, clearSelection: () => void) => {
+    if (ids.size === 0) return;
+    const { error } = await supabase
+      .from("receipts")
+      .update({ status: "flagged", flag_reason: "Bulk flagged", reviewed_at: new Date().toISOString() })
+      .in("id", Array.from(ids));
+    if (error) {
+      toast.error("Failed to flag selected");
+      return;
+    }
+    toast.success(`${ids.size} receipt${ids.size === 1 ? "" : "s"} flagged`);
+    clearSelection();
+    refreshAfterFlag(periodId);
   };
 
   const handleFlag = async () => {
@@ -744,7 +755,7 @@ const Matching = () => {
     toast.success("Receipt flagged");
     setFlagReceiptId(null);
     setFlagReason("");
-    refreshAll(periodId);
+    refreshAfterFlag(periodId);
   };
 
   /* ── Receipt actions dropdown ───────────────────────────────── */
@@ -779,7 +790,7 @@ const Matching = () => {
 
   /* ── Search modal helpers ───────────────────────────────────── */
   const openSearchTx = (receiptId: string) => {
-    const receipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(r => r.id === receiptId);
+    const receipt = [...unmatchedReceipts, ...allReceipts].find(r => r.id === receiptId);
     const vendor = receipt ? (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "") : "";
     const amount = receipt ? (receipt.amount_confirmed ?? receipt.amount_extracted) : null;
     const tolerance = 0.5;
@@ -799,7 +810,6 @@ const Matching = () => {
     setSearchModal({ type: "receipt", sourceId: txId });
   };
 
-  // Auto-run search when modal opens with pre-filled data
   useEffect(() => {
     if (searchModal && (searchVendor || searchAmountMin || searchAmountMax)) {
       runSearch();
@@ -812,7 +822,7 @@ const Matching = () => {
     setSearchLoading(true);
 
     if (searchModal.type === "transaction") {
-      const sourceReceipt = [...unmatchedReceipts, ...reviewReceipts, ...allReceipts].find(
+      const sourceReceipt = [...unmatchedReceipts, ...allReceipts].find(
         (r) => r.id === searchModal.sourceId,
       );
       const sourceDate = sourceReceipt
@@ -827,7 +837,6 @@ const Matching = () => {
         .order("transaction_date", { ascending: false })
         .limit(20);
 
-      // Keep “Use Different” focused on likely matches when receipt date exists.
       if (sourceDate) {
         const base = new Date(`${sourceDate}T00:00:00Z`);
         if (!Number.isNaN(base.getTime())) {
@@ -890,7 +899,7 @@ const Matching = () => {
 
     toast.success("Manually matched");
     setSearchModal(null);
-    refreshAll(periodId);
+    refreshAfterMatch(periodId);
   };
 
   /* ── Helpers ────────────────────────────────────────────────── */
@@ -902,7 +911,6 @@ const Matching = () => {
   const statCards = [
     { label: "Total Receipts", value: stats.total, icon: <Files className="h-5 w-5" />, color: "text-foreground", tab: "all" },
     { label: "Matched", value: stats.matched, icon: <FileCheck className="h-5 w-5" />, color: "text-accent", tab: "matched" },
-    { label: "Needs Review", value: stats.needsReview, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", tab: "needs-review" },
     { label: "No Match", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-destructive", tab: "unmatched" },
     { label: "Tx Without Receipt", value: stats.txWithoutReceipt, icon: <CreditCard className="h-5 w-5" />, color: "text-muted-foreground", tab: "no-receipt" },
     { label: "Suspected Duplicates", value: duplicateGroups.length, icon: <Copy className="h-5 w-5" />, color: "text-orange-500", tab: "duplicates" },
@@ -926,11 +934,44 @@ const Matching = () => {
   const matchesEmpTx = (tx: TxRow) =>
     !activeEmp || (tx.user?.full_name?.toLowerCase().includes(activeEmp) ?? false);
 
+  // Filter for duplicate groups by employee
+  const matchesEmpDupe = (group: DuplicateGroup) => {
+    if (!activeEmp) return true;
+    const origName = group.original.employee?.full_name?.toLowerCase() ?? "";
+    const dupeName = group.duplicate.employee?.full_name?.toLowerCase() ?? "";
+    return origName.includes(activeEmp) || dupeName.includes(activeEmp);
+  };
+
   const filteredAll = allReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
-  const filteredReview = reviewReceipts.filter((r) => matchesVendorR(r));
   const filteredUnmatched = unmatchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
   const filteredOrphans = orphanTxs.filter((tx) => matchesVendorTx(tx) && matchesEmpTx(tx));
   const filteredMatched = matchedReceipts.filter((r) => matchesVendorR(r) && matchesEmpR(r));
+  const filteredDuplicates = duplicateGroups.filter((g) => matchesEmpDupe(g));
+
+  // Paginated slices
+  const pagedAll = filteredAll.slice(pageAll * PAGE_SIZE, (pageAll + 1) * PAGE_SIZE);
+  const pagedUnmatched = filteredUnmatched.slice(pageUnmatched * PAGE_SIZE, (pageUnmatched + 1) * PAGE_SIZE);
+  const pagedMatched = filteredMatched.slice(pageMatched * PAGE_SIZE, (pageMatched + 1) * PAGE_SIZE);
+  const pagedOrphans = filteredOrphans.slice(pageOrphans * PAGE_SIZE, (pageOrphans + 1) * PAGE_SIZE);
+
+  // Reset page on filter change
+  useEffect(() => { setPageAll(0); setPageUnmatched(0); setPageMatched(0); setPageOrphans(0); }, [filterVendor, filterEmployee]);
+
+  // Toggle helpers for bulk selection
+  const toggleSelect = (id: string, set: Set<string>, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setter(next);
+  };
+
+  const toggleSelectAll = (items: ReceiptRow[], set: Set<string>, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    const allSelected = items.every((r) => set.has(r.id));
+    if (allSelected) {
+      setter(new Set());
+    } else {
+      setter(new Set(items.map((r) => r.id)));
+    }
+  };
 
   /* ── Render ─────────────────────────────────────────────────── */
   return (
@@ -982,14 +1023,13 @@ const Matching = () => {
             <span className="font-semibold">Last Run:</span>
             <span>Total: {bulkResult.total}</span>
             <span className="text-accent font-medium">Auto-Matched: {bulkResult.autoMatched}</span>
-            <span className="text-warning font-medium">Needs Review: {bulkResult.needsReview}</span>
             <span className="text-muted-foreground">No Match: {bulkResult.noMatch}</span>
           </CardContent>
         </Card>
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
         {statCards.map((s) => (
           <Card
             key={s.label}
@@ -1003,6 +1043,8 @@ const Matching = () => {
               setSearchParams({ tab: s.tab });
               setFilterVendor("");
               setFilterEmployee("");
+              setSelectedUnmatched(new Set());
+              setSelectedMatched(new Set());
             }}
           >
             <CardContent className="p-4 flex flex-col gap-1">
@@ -1043,8 +1085,8 @@ const Matching = () => {
           )}
         </div>
 
-        {/* Employee dropdown */}
-        {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt") && (
+        {/* Employee dropdown — now includes duplicates tab */}
+        {(activeTab === "all" || activeTab === "unmatched" || activeTab === "matched" || activeTab === "no-receipt" || activeTab === "duplicates") && (
           <Select value={filterEmployee} onValueChange={setFilterEmployee}>
             <SelectTrigger className="h-8 text-sm w-[180px]">
               <SelectValue placeholder="All employees" />
@@ -1081,6 +1123,36 @@ const Matching = () => {
         </div>
       </div>
 
+      {/* Bulk selection action bar */}
+      {activeTab === "unmatched" && selectedUnmatched.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <span className="text-sm font-medium">{selectedUnmatched.size} selected</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleBulkApprove(selectedUnmatched, () => setSelectedUnmatched(new Set()))}>
+            <CheckCircle className="h-3 w-3" /> Approve Selected
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => handleBulkFlag(selectedUnmatched, () => setSelectedUnmatched(new Set()))}>
+            <Flag className="h-3 w-3" /> Flag Selected
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedUnmatched(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+      {activeTab === "matched" && selectedMatched.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <span className="text-sm font-medium">{selectedMatched.size} selected</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleBulkApprove(selectedMatched, () => setSelectedMatched(new Set()))}>
+            <CheckCircle className="h-3 w-3" /> Approve Selected
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => handleBulkFlag(selectedMatched, () => setSelectedMatched(new Set()))}>
+            <Flag className="h-3 w-3" /> Flag Selected
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedMatched(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Tab content (no visible tab strip) */}
       <Tabs
         value={activeTab}
@@ -1102,194 +1174,72 @@ const Matching = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Photo</TableHead>
-                    <TableHead className="w-10">AI</TableHead>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Match</TableHead>
-                    <TableHead>Matched Tx</TableHead>
-                    <TableHead className="w-10" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAll.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
-                      </TableCell>
-                      <TableCell>
-                        <ExtractedIndicator receipt={r} />
-                      </TableCell>
-                      <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
-                      <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {r.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="secondary"
-                          className={`text-[10px] px-1.5 py-0 ${
-                            r.match_status === "matched" || r.match_status === "auto_matched" || r.match_status === "manual_match"
-                              ? "bg-accent/15 text-accent"
-                              : r.match_status === "needs_review"
-                              ? "bg-warning/15 text-warning"
-                              : "bg-destructive/15 text-destructive"
-                          }`}
-                        >
-                          {r.match_status === "auto_matched" ? "Auto" : r.match_status === "manual_match" ? "Manual" : r.match_status === "matched" ? "Matched" : r.match_status === "needs_review" ? "Review" : "Unmatched"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {r.transaction ? (
-                          <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
-                        ) : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <ReceiptActionsMenu receiptId={r.id} status={r.status} />
-                      </TableCell>
+            <div className="space-y-1">
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">Photo</TableHead>
+                      <TableHead className="w-10">AI</TableHead>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Match</TableHead>
+                      <TableHead>Matched Tx</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedAll.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>
+                          <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
+                        </TableCell>
+                        <TableCell>
+                          <ExtractedIndicator receipt={r} />
+                        </TableCell>
+                        <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
+                        <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">{fmt(ra(r))}</TableCell>
+                        <TableCell className="text-sm">{rd(r) ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {r.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[10px] px-1.5 py-0 ${
+                              r.match_status === "matched" || r.match_status === "auto_matched" || r.match_status === "manual_match"
+                                ? "bg-accent/15 text-accent"
+                                : "bg-destructive/15 text-destructive"
+                            }`}
+                          >
+                            {r.match_status === "auto_matched" ? "Auto" : r.match_status === "manual_match" ? "Manual" : r.match_status === "matched" ? "Matched" : "Unmatched"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {r.transaction ? (
+                            <span>{r.transaction.vendor_normalized ?? r.transaction.vendor_raw ?? "—"} · {fmt(r.transaction.amount ?? null)}</span>
+                          ) : "—"}
+                        </TableCell>
+                        <TableCell>
+                          <ReceiptActionsMenu receiptId={r.id} status={r.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination page={pageAll} totalItems={filteredAll.length} onPageChange={setPageAll} />
             </div>
           )}
         </TabsContent>
 
-        {/* ── Tab 1: Needs Review ──────────────────────────────── */}
-        <TabsContent value="needs-review">
-          {reviewLoading ? (
-            <div className="space-y-3">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-32 rounded-lg" />)}</div>
-          ) : filteredReview.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
-                <CheckCircle className="h-10 w-10" />
-                <p className="text-sm">No receipts need review.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {filteredReview.map((r) => {
-                const suggestions = (r.match_suggestions ?? []) as MatchSuggestion[];
-                const legacyTx = suggestions.length === 0 && r.transaction_id ? legacyTxCache[r.transaction_id] : null;
-
-                return (
-                  <Card key={r.id}>
-                    <CardContent className="p-4">
-                      <div className="grid md:grid-cols-2 gap-4">
-                        {/* Left: receipt info + thumbnail */}
-                        <div className="space-y-2">
-                          <ReviewCardThumb storagePath={r.storage_path} onOpen={setLightboxUrl} />
-                          <div className="flex items-center gap-2">
-                            <Image className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Receipt</span>
-                          </div>
-                          <div className="text-sm space-y-1">
-                            <div><span className="text-muted-foreground">Vendor:</span> <span className="font-medium">{rv(r)}</span></div>
-                            <div><span className="text-muted-foreground">Amount:</span> <span className="font-medium">{fmt(ra(r))}</span></div>
-                            <div><span className="text-muted-foreground">Date:</span> <span className="font-medium">{rd(r) ?? "—"}</span></div>
-                            <div><span className="text-muted-foreground">Employee:</span> <span className="font-medium">{r.employee?.full_name ?? "—"}</span></div>
-                            {r.ai_confidence != null && (
-                              <div><span className="text-muted-foreground">AI Confidence:</span> <span className="font-medium">{Math.round(r.ai_confidence * 100)}%</span></div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right: suggestions */}
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">Candidate Transactions</span>
-                          </div>
-
-                          {suggestions.length > 0 ? (
-                            <div className="space-y-2">
-                              {suggestions.map((s) => (
-                                <div key={s.transactionId} className="flex items-center justify-between border rounded-md p-2 text-sm">
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${scoreBadgeClass(s.score)}`}>
-                                        {Math.round(s.score * 100)}%
-                                      </Badge>
-                                      <span className="font-medium truncate">{s.vendor ?? "—"}</span>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground mt-0.5">
-                                      {fmt(s.amount)} · {s.date ?? "—"}
-                                    </div>
-                                  </div>
-                                  {isClosed ? null : (
-                                    <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, s.transactionId, s.score)}>
-                                      <CheckCircle className="h-3 w-3 mr-1" /> Confirm
-                                    </Button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          ) : legacyTx ? (
-                            /* Legacy data: transaction_id set but no suggestions stored */
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between border rounded-md p-2 text-sm border-warning/30">
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">
-                                      —
-                                    </Badge>
-                                    <span className="font-medium truncate">{legacyTx.vendor_normalized ?? legacyTx.vendor_raw ?? "—"}</span>
-                                  </div>
-                                  <div className="text-xs text-muted-foreground mt-0.5">
-                                    {fmt(legacyTx.amount)} · {legacyTx.transaction_date ?? "—"}
-                                  </div>
-                                </div>
-                                {!isClosed && (
-                                  <Button size="sm" variant="outline" className="ml-2 h-7 text-xs" onClick={() => confirmMatch(r.id, legacyTx.id, r.match_confidence ?? 0)}>
-                                    <CheckCircle className="h-3 w-3 mr-1" /> Confirm
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No candidates stored.</p>
-                          )}
-
-                          {isClosed ? (
-                            <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
-                          ) : (
-                            <div className="flex gap-2 mt-2 flex-wrap">
-                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchTx(r.id)}>
-                                <Search className="h-3 w-3 mr-1" /> Use Different
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => markNoMatch(r.id)}>
-                                <XCircle className="h-3 w-3 mr-1" /> No Match
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => handleApprove(r.id)} disabled={r.status === "approved"}>
-                                <CheckCircle className="h-3 w-3 mr-1 text-accent" /> Approve
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setFlagReceiptId(r.id); setFlagReason(""); }} disabled={r.status === "flagged"}>
-                                <Flag className="h-3 w-3 mr-1 text-destructive" /> Flag
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ── Tab 2: No Match Found ────────────────────────────── */}
+        {/* ── Tab: No Match Found ──────────────────────────────── */}
         <TabsContent value="unmatched">
           {unmatchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -1302,7 +1252,6 @@ const Matching = () => {
             </Card>
           ) : (
             <div className="space-y-3">
-              {/* Missing extraction banner */}
               {missingExtractionCount > 0 && (
                 <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
@@ -1314,6 +1263,12 @@ const Matching = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={pagedUnmatched.length > 0 && pagedUnmatched.every((r) => selectedUnmatched.has(r.id))}
+                          onCheckedChange={() => toggleSelectAll(pagedUnmatched, selectedUnmatched, setSelectedUnmatched)}
+                        />
+                      </TableHead>
                       <TableHead className="w-12">Photo</TableHead>
                       <TableHead className="w-10">AI</TableHead>
                       <TableHead>Employee</TableHead>
@@ -1325,10 +1280,16 @@ const Matching = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredUnmatched.map((r) => {
+                    {pagedUnmatched.map((r) => {
                       const missingExtraction = !r.vendor_extracted && !r.vendor_confirmed;
                       return (
                         <TableRow key={r.id} className={missingExtraction ? "border-l-2 border-l-warning" : ""}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selectedUnmatched.has(r.id)}
+                              onCheckedChange={() => toggleSelect(r.id, selectedUnmatched, setSelectedUnmatched)}
+                            />
+                          </TableCell>
                           <TableCell>
                             <ReceiptThumb storagePath={r.storage_path} onClick={setLightboxUrl} />
                           </TableCell>
@@ -1357,11 +1318,12 @@ const Matching = () => {
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination page={pageUnmatched} totalItems={filteredUnmatched.length} onPageChange={setPageUnmatched} />
             </div>
           )}
         </TabsContent>
 
-        {/* ── Tab 3: Tx Missing Receipt ────────────────────────── */}
+        {/* ── Tab: Tx Missing Receipt ──────────────────────────── */}
         <TabsContent value="no-receipt">
           {orphanLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -1373,52 +1335,55 @@ const Matching = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Vendor</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Card</TableHead>
-                    <TableHead className="w-48" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredOrphans.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">{fmt(tx.amount)}</TableCell>
-                      <TableCell className="text-sm">{tx.transaction_date ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{tx.card_last_four ? `•••• ${tx.card_last_four}` : "—"}</TableCell>
-                      <TableCell>
-                        {isClosed ? (
-                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
-                        ) : (
-                          <div className="flex gap-1">
-                            <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
-                              <Search className="h-3 w-3 mr-1" /> Find Receipt
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
-                              <Flag className="h-3 w-3 mr-1" /> No Receipt
-                            </Button>
-                            <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
-                              <FileDown className="h-3 w-3 mr-1" /> Placeholder
-                            </Button>
-                          </div>
-                        )}
-                      </TableCell>
+            <div className="space-y-1">
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Card</TableHead>
+                      <TableHead className="w-48" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedOrphans.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
+                        <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">{fmt(tx.amount)}</TableCell>
+                        <TableCell className="text-sm">{tx.transaction_date ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{tx.card_last_four ? `•••• ${tx.card_last_four}` : "—"}</TableCell>
+                        <TableCell>
+                          {isClosed ? (
+                            <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                          ) : (
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openSearchReceipt(tx.id)}>
+                                <Search className="h-3 w-3 mr-1" /> Find Receipt
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => flagNoReceipt(tx.id)}>
+                                <Flag className="h-3 w-3 mr-1" /> No Receipt
+                              </Button>
+                              <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
+                                <FileDown className="h-3 w-3 mr-1" /> Placeholder
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination page={pageOrphans} totalItems={filteredOrphans.length} onPageChange={setPageOrphans} />
             </div>
           )}
         </TabsContent>
 
-        {/* ── Tab 4: Matched ───────────────────────────────────── */}
+        {/* ── Tab: Matched ─────────────────────────────────────── */}
         <TabsContent value="matched">
           {matchedLoading ? (
             <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-lg" />)}</div>
@@ -1430,71 +1395,86 @@ const Matching = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">Photo</TableHead>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Receipt Vendor</TableHead>
-                    <TableHead className="text-right">Receipt Amt</TableHead>
-                    <TableHead>Tx Vendor</TableHead>
-                    <TableHead className="text-right">Tx Amt</TableHead>
-                    <TableHead>Tx Date</TableHead>
-                    <TableHead>Score</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead className="w-10" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredMatched.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell>
-                        <ReceiptThumb
-                          storagePath={r.storage_path}
-                          onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
-                          isPlaceholder={r.is_placeholder ?? false}
+            <div className="space-y-1">
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={pagedMatched.length > 0 && pagedMatched.every((r) => selectedMatched.has(r.id))}
+                          onCheckedChange={() => toggleSelectAll(pagedMatched, selectedMatched, setSelectedMatched)}
                         />
-                      </TableCell>
-                      <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
-                      <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
-                      <TableCell className="text-sm text-right">{fmt(ra(r))}</TableCell>
-                      <TableCell className="text-sm font-medium">{r.transaction?.vendor_normalized ?? r.transaction?.vendor_raw ?? "—"}</TableCell>
-                      <TableCell className="text-sm text-right">{fmt(r.transaction?.amount ?? null)}</TableCell>
-                      <TableCell className="text-sm">{r.transaction?.transaction_date ?? "—"}</TableCell>
-                      <TableCell>
-                        {r.match_confidence != null && (
-                          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${scoreBadgeClass(r.match_confidence)}`}>
-                            {Math.round(r.match_confidence * 100)}%
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                          {r.match_status === "auto_matched" ? "Auto" : "Manual"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {isClosed ? (
-                          <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
-                              <Unlink className="h-3 w-3" />
-                            </Button>
-                            <ReceiptActionsMenu receiptId={r.id} status={r.status} />
-                          </div>
-                        )}
-                      </TableCell>
+                      </TableHead>
+                      <TableHead className="w-12">Photo</TableHead>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Receipt Vendor</TableHead>
+                      <TableHead className="text-right">Receipt Amt</TableHead>
+                      <TableHead>Tx Vendor</TableHead>
+                      <TableHead className="text-right">Tx Amt</TableHead>
+                      <TableHead>Tx Date</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="w-10" />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {pagedMatched.map((r) => (
+                      <TableRow key={r.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedMatched.has(r.id)}
+                            onCheckedChange={() => toggleSelect(r.id, selectedMatched, setSelectedMatched)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <ReceiptThumb
+                            storagePath={r.storage_path}
+                            onClick={(url) => (r.is_placeholder ? window.open(url, "_blank") : setLightboxUrl(url))}
+                            isPlaceholder={r.is_placeholder ?? false}
+                          />
+                        </TableCell>
+                        <TableCell className="text-sm">{r.employee?.full_name ?? "—"}</TableCell>
+                        <TableCell className="text-sm font-medium">{rv(r)}</TableCell>
+                        <TableCell className="text-sm text-right">{fmt(ra(r))}</TableCell>
+                        <TableCell className="text-sm font-medium">{r.transaction?.vendor_normalized ?? r.transaction?.vendor_raw ?? "—"}</TableCell>
+                        <TableCell className="text-sm text-right">{fmt(r.transaction?.amount ?? null)}</TableCell>
+                        <TableCell className="text-sm">{r.transaction?.transaction_date ?? "—"}</TableCell>
+                        <TableCell>
+                          {r.match_confidence != null && (
+                            <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 ${scoreBadgeClass(r.match_confidence)}`}>
+                              {Math.round(r.match_confidence * 100)}%
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                            {r.match_status === "auto_matched" ? "Auto" : "Manual"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {isClosed ? (
+                            <Badge variant="secondary" className="text-[10px] gap-1"><Lock className="h-3 w-3" /> Locked</Badge>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
+                                <Unlink className="h-3 w-3" />
+                              </Button>
+                              <ReceiptActionsMenu receiptId={r.id} status={r.status} />
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <TablePagination page={pageMatched} totalItems={filteredMatched.length} onPageChange={setPageMatched} />
             </div>
           )}
         </TabsContent>
 
-        {/* ── Tab 5: Duplicates ────────────────────────────────── */}
+        {/* ── Tab: Duplicates ──────────────────────────────────── */}
         <TabsContent value="duplicates">
           {duplicatesLoading ? (
             <div className="space-y-3">
@@ -1502,7 +1482,7 @@ const Matching = () => {
                 <Skeleton key={i} className="h-32 rounded-lg" />
               ))}
             </div>
-          ) : duplicateGroups.length === 0 ? (
+          ) : filteredDuplicates.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center py-12 text-muted-foreground gap-2">
                 <CheckCircle className="h-10 w-10" />
@@ -1518,7 +1498,7 @@ const Matching = () => {
                 </span>
               </div>
 
-              {duplicateGroups.map((group, idx) => (
+              {filteredDuplicates.map((group, idx) => (
                 <Card key={idx} className="border-orange-400/30">
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-center gap-2 flex-wrap">

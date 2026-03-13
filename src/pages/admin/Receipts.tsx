@@ -183,6 +183,71 @@ const AdminReceipts = () => {
 
   const fmt = (n: number | null) => (n != null ? `$${Number(n).toFixed(2)}` : "—");
 
+  const handleDownloadZip = async () => {
+    setZipping(true);
+    try {
+      const zip = new JSZip();
+      const selectedReceipts = receipts.filter((r) => selected.has(r.id));
+      let added = 0;
+
+      for (const receipt of selectedReceipts) {
+        if (!receipt.storage_path) continue;
+        const signedUrl = await getSignedReceiptUrl(receipt.storage_path);
+        if (!signedUrl) continue;
+
+        const resp = await fetch(signedUrl);
+        const blob = await resp.blob();
+
+        const vendor = (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "unknown")
+          .replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
+        const date = receipt.date_confirmed ?? receipt.date_extracted ?? "unknown";
+        const emp = ((receipt.employee as any)?.full_name ?? "employee")
+          .replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+        const ext = blob.type.includes("png") ? "png" : blob.type.includes("pdf") ? "pdf" : "jpg";
+
+        zip.file(`${emp}_${vendor}_${date}.${ext}`, blob);
+        added++;
+      }
+
+      if (added === 0) {
+        toast.error("No downloadable receipt images found");
+        return;
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      const periodName = periods.find((p) => p.id === periodId)?.name ?? "receipts";
+      a.href = url;
+      a.download = `receipts-${periodName.replace(/\s+/g, "-").toLowerCase()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${added} receipt(s)`);
+      setSelected(new Set());
+    } catch {
+      toast.error("Failed to create ZIP");
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const allSelected = receipts.length > 0 && receipts.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(receipts.map((r) => r.id)));
+    }
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>

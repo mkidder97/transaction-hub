@@ -69,6 +69,7 @@ const AdminReceipts = () => {
   const [matchFilter, setMatchFilter] = useState("all");
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     supabase

@@ -163,6 +163,17 @@ interface BulkResult {
   noMatch: number;
 }
 
+interface MessageTarget {
+  id: string;
+  user_id: string | null;
+  vendor: string;
+  amount: number | null;
+  date: string | null;
+  employeeName: string | null;
+  transaction_id?: string;
+  receipt_id?: string | null;
+}
+
 const PAGE_SIZE = 20;
 
 /* ── Score badge color ───────────────────────────────────────────── */

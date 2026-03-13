@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Receipt, CheckCircle, Flag, FileX, Clock } from "lucide-react";
+import { Receipt, CheckCircle, Flag, FileX, Clock, Search, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 

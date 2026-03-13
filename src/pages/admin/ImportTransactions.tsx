@@ -374,8 +374,14 @@ const ImportTransactions = () => {
       const cardIdx = lowerHeaders.findIndex((h) => h.includes("card"));
       if (cardIdx >= 0) guessed.card_last_four = headers[cardIdx];
       setCsvMapping(guessed);
+
+      // Detect Amex format and apply preset automatically
+      const isAmex = AMEX_COLUMNS.every(col => headers.includes(col));
+      setIsAmexPreset(isAmex);
+      if (isAmex) {
+        setCsvMapping(AMEX_PRESET);
+      }
     };
-    reader.readAsText(file);
   }, []);
 
   const applyMapping = useCallback(() => {

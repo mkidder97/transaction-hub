@@ -17,9 +17,10 @@ import { formatDistanceToNow } from "date-fns";
 
 interface StatCards {
   total: number;
-  approved: number;
-  flagged: number;
-  unmatched: number;
+  matched: number;
+  needsReview: number;
+  noMatch: number;
+  txWithoutReceipt: number;
 }
 
 interface RecentReceipt {

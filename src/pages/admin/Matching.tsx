@@ -73,6 +73,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
-import { MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { MessageSquare, ExternalLink } from "lucide-react";
 
 interface MessageRow {
   id: string;
@@ -33,6 +35,7 @@ function timeAgo(dateStr: string) {
 
 const Messages = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -63,6 +66,13 @@ const Messages = () => {
     setMessages((prev) =>
       prev.map((m) => (m.id === id ? { ...m, is_read: true } : m))
     );
+  };
+
+  const handleViewTransaction = (m: MessageRow) => {
+    if (!m.is_read) markRead(m.id);
+    if (m.transaction_id) {
+      navigate(`/employee/transactions?tx=${m.transaction_id}`);
+    }
   };
 
   const fmt = (n: number | null) =>
@@ -102,16 +112,11 @@ const Messages = () => {
             return (
               <Card
                 key={m.id}
-                className={`cursor-pointer transition-colors ${
-                  !m.is_read
-                    ? "bg-primary/5 border-primary/20"
-                    : ""
+                className={`transition-colors ${
+                  !m.is_read ? "bg-primary/5 border-primary/20" : ""
                 }`}
-                onClick={() => {
-                  if (!m.is_read) markRead(m.id);
-                }}
               >
-                <CardContent className="p-4 space-y-1">
+                <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">
                       From {m.sender?.full_name ?? "Admin"}
@@ -130,6 +135,19 @@ const Messages = () => {
                     </p>
                   )}
                   <p className="text-sm">{m.message}</p>
+                  {m.transaction_id && (
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={() => handleViewTransaction(m)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        View Transaction
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

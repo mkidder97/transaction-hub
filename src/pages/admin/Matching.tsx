@@ -1815,6 +1815,32 @@ const Matching = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Message Employee Dialog ────────────────────────────── */}
+      <Dialog open={!!messageTx} onOpenChange={(open) => { if (!open) { setMessageTx(null); setMessageText(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Message to {messageTx?.employeeName ?? "Employee"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            re: {messageTx?.vendor ?? "—"} · {messageTx?.amount != null ? `$${Number(messageTx.amount).toFixed(2)}` : "—"} · {messageTx?.date ?? "—"}
+          </p>
+          <Textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMessageTx(null); setMessageText(""); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendMessage} disabled={sendingMessage || !messageText.trim() || !messageTx?.user_id}>
+              {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MessageSquare className="h-4 w-4 mr-1" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

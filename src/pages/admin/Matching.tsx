@@ -344,6 +344,10 @@ const Matching = () => {
   const [flagReason, setFlagReason] = useState("");
   const [flagSubmitting, setFlagSubmitting] = useState(false);
 
+  // Message dialog state
+  const [messageTx, setMessageTx] = useState<MessageTarget | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
   // Pagination state per tab
   const [pageAll, setPageAll] = useState(0);
   const [pageUnmatched, setPageUnmatched] = useState(0);

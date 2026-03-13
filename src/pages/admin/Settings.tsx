@@ -97,6 +97,16 @@ const AdminSettings = () => {
   const [closePreview, setClosePreview] = useState<ClosePreview | null>(null);
   const [closeLoading, setCloseLoading] = useState(false);
 
+  // Report filters
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [reportFilters, setReportFilters] = useState<Record<string, string | undefined>>({});
+
+  useEffect(() => {
+    supabase.from("profiles").select("id, full_name").eq("is_active", true).order("full_name").then(({ data }) => {
+      if (data) setProfiles(data);
+    });
+  }, []);
+
   const fetchPeriods = useCallback(async () => {
     setPeriodsLoading(true);
     const { data } = await supabase

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
@@ -159,6 +161,17 @@ interface BulkResult {
   total: number;
   autoMatched: number;
   noMatch: number;
+}
+
+interface MessageTarget {
+  id: string;
+  user_id: string | null;
+  vendor: string;
+  amount: number | null;
+  date: string | null;
+  employeeName: string | null;
+  transaction_id?: string;
+  receipt_id?: string | null;
 }
 
 const PAGE_SIZE = 20;
@@ -268,6 +281,7 @@ function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
 
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "unmatched";
 
@@ -330,6 +344,10 @@ const Matching = () => {
   const [flagReason, setFlagReason] = useState("");
   const [flagSubmitting, setFlagSubmitting] = useState(false);
 
+  // Message dialog state
+  const [messageTx, setMessageTx] = useState<MessageTarget | null>(null);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
   // Pagination state per tab
   const [pageAll, setPageAll] = useState(0);
   const [pageUnmatched, setPageUnmatched] = useState(0);
@@ -758,7 +776,41 @@ const Matching = () => {
     refreshAfterFlag(periodId);
   };
 
-  /* ── Receipt actions dropdown ───────────────────────────────── */
+  /* ── Open message dialog helper ─────────────────────────────── */
+  const openMessageDialog = (target: MessageTarget) => {
+    const firstName = target.employeeName?.split(" ")[0] ?? "there";
+    const vendor = target.vendor || "a";
+    const amount = target.amount != null ? `$${Number(target.amount).toFixed(2)}` : "an unknown amount";
+    const date = target.date ?? "an unknown date";
+    setMessageText(
+      `Hi ${firstName}, we're missing a receipt for your ${vendor} charge of ${amount} on ${date}. Could you please upload it as soon as possible?`
+    );
+    setMessageTx(target);
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageTx || !user || !messageTx.user_id) return;
+    setSendingMessage(true);
+    const { error } = await (supabase as any)
+      .from("receipt_messages")
+      .insert({
+        sender_id: user.id,
+        recipient_id: messageTx.user_id,
+        transaction_id: messageTx.transaction_id ?? null,
+        receipt_id: messageTx.receipt_id ?? null,
+        message: messageText,
+      });
+    setSendingMessage(false);
+    if (error) {
+      toast.error("Failed to send message");
+      return;
+    }
+    toast.success(`Message sent to ${messageTx.employeeName ?? "employee"}`);
+    setMessageTx(null);
+    setMessageText("");
+  };
+
+
   const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
     if (isClosed) return null;
     return (
@@ -1370,6 +1422,19 @@ const Matching = () => {
                               <Button size="sm" variant="ghost" className="text-xs h-7 text-muted-foreground" onClick={() => setPlaceholderTx(tx)}>
                                 <FileDown className="h-3 w-3 mr-1" /> Placeholder
                               </Button>
+                              {tx.user_id && (
+                                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => openMessageDialog({
+                                  id: tx.id,
+                                  user_id: tx.user_id,
+                                  vendor: tx.vendor_normalized ?? tx.vendor_raw ?? "unknown",
+                                  amount: tx.amount,
+                                  date: tx.transaction_date,
+                                  employeeName: tx.user?.full_name ?? null,
+                                  transaction_id: tx.id,
+                                })}>
+                                  <MessageSquare className="h-3 w-3 mr-1" /> Message
+                                </Button>
+                              )}
                             </div>
                           )}
                         </TableCell>
@@ -1460,6 +1525,20 @@ const Matching = () => {
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
                                 <Unlink className="h-3 w-3" />
                               </Button>
+                              {r.user_id && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openMessageDialog({
+                                  id: r.id,
+                                  user_id: r.user_id,
+                                  vendor: rv(r),
+                                  amount: ra(r),
+                                  date: rd(r),
+                                  employeeName: r.employee?.full_name ?? null,
+                                  transaction_id: r.transaction?.id,
+                                  receipt_id: r.id,
+                                })}>
+                                  <MessageSquare className="h-3 w-3" />
+                                </Button>
+                              )}
                               <ReceiptActionsMenu receiptId={r.id} status={r.status} />
                             </div>
                           )}
@@ -1732,6 +1811,32 @@ const Matching = () => {
             <Button variant="destructive" onClick={handleFlag} disabled={flagSubmitting || !flagReason.trim()}>
               {flagSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Flag className="h-4 w-4 mr-1" />}
               Flag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Message Employee Dialog ────────────────────────────── */}
+      <Dialog open={!!messageTx} onOpenChange={(open) => { if (!open) { setMessageTx(null); setMessageText(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send Message to {messageTx?.employeeName ?? "Employee"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            re: {messageTx?.vendor ?? "—"} · {messageTx?.amount != null ? `$${Number(messageTx.amount).toFixed(2)}` : "—"} · {messageTx?.date ?? "—"}
+          </p>
+          <Textarea
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setMessageTx(null); setMessageText(""); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendMessage} disabled={sendingMessage || !messageText.trim() || !messageTx?.user_id}>
+              {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MessageSquare className="h-4 w-4 mr-1" />}
+              Send
             </Button>
           </DialogFooter>
         </DialogContent>

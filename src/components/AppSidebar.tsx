@@ -8,10 +8,14 @@ import {
   Settings,
   Users,
   Receipt as ReceiptIcon,
+  MessageSquare,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 
 import {
   Sidebar,
@@ -29,6 +33,7 @@ import {
 
 const employeeItems = [
   { title: "My Receipts", url: "/employee/receipts", icon: Receipt },
+  { title: "Messages", url: "/employee/messages", icon: MessageSquare },
   { title: "Submit Receipt", url: "/employee/submit", icon: Upload },
   { title: "My Transactions", url: "/employee/transactions", icon: CreditCard },
 ];
@@ -49,8 +54,24 @@ const adminExpenseItems = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const location = useLocation();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || role === "admin") return;
+    const fetchUnread = async () => {
+      const { count } = await (supabase as any)
+        .from("receipt_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", user.id)
+        .eq("is_read", false);
+      setUnreadCount(count ?? 0);
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [user, role]);
 
   const items = role === "admin" ? adminItems : employeeItems;
 
@@ -91,7 +112,14 @@ export function AppSidebar() {
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                     >
                       <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <span className="flex items-center gap-2">
+                        {item.title}
+                        {item.url === "/employee/messages" && unreadCount > 0 && (
+                          <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px] font-bold">
+                            {unreadCount}
+                          </Badge>
+                        )}
+                      </span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

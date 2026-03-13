@@ -16,6 +16,7 @@ import { Loader2 } from "lucide-react";
 const EmployeeReceipts = lazy(() => import("@/pages/employee/Receipts"));
 const SubmitReceipt = lazy(() => import("@/pages/employee/SubmitReceipt"));
 const EmployeeTransactions = lazy(() => import("@/pages/employee/Transactions"));
+const EmployeeMessages = lazy(() => import("@/pages/employee/Messages"));
 
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminReceipts = lazy(() => import("@/pages/admin/Receipts"));
@@ -55,6 +56,7 @@ const App = () => (
               <Route element={<AppLayout />}>
                 <Route path="/employee/receipts" element={<RoleGuard allowedRole="employee"><EmployeeReceipts /></RoleGuard>} />
                 <Route path="/employee/submit" element={<SubmitReceipt />} />
+                <Route path="/employee/messages" element={<RoleGuard allowedRole="employee"><EmployeeMessages /></RoleGuard>} />
                 <Route path="/employee/transactions" element={<RoleGuard allowedRole="employee"><EmployeeTransactions /></RoleGuard>} />
               </Route>
 

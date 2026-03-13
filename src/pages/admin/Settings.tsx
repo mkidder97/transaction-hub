@@ -28,11 +28,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare, Download, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, startOfMonth, endOfMonth, format } from "date-fns";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
+import { generateReconciliationExcel } from "@/lib/generateReconciliationExcel";
 import VendorManagement from "@/components/admin/VendorManagement";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ---------- Types ----------
 
@@ -82,6 +96,16 @@ const AdminSettings = () => {
   const [closingPeriod, setClosingPeriod] = useState<Period | null>(null);
   const [closePreview, setClosePreview] = useState<ClosePreview | null>(null);
   const [closeLoading, setCloseLoading] = useState(false);
+
+  // Report filters
+  const [profiles, setProfiles] = useState<{ id: string; full_name: string | null }[]>([]);
+  const [reportFilters, setReportFilters] = useState<Record<string, string | undefined>>({});
+
+  useEffect(() => {
+    supabase.from("profiles").select("id, full_name").eq("is_active", true).order("full_name").then(({ data }) => {
+      if (data) setProfiles(data);
+    });
+  }, []);
 
   const fetchPeriods = useCallback(async () => {
     setPeriodsLoading(true);
@@ -314,7 +338,7 @@ const AdminSettings = () => {
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-28" />
+                  <TableHead className="w-80" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -331,11 +355,43 @@ const AdminSettings = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {p.is_current && !p.is_closed && (
-                        <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => openCloseDialog(p)}>
-                          <Lock className="h-3 w-3" /> Close Period
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={reportFilters[p.id] ?? "__all__"}
+                          onValueChange={(v) => setReportFilters((prev) => ({ ...prev, [p.id]: v === "__all__" ? undefined : v }))}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-[140px]">
+                            <SelectValue placeholder="All Employees" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All Employees</SelectItem>
+                            {profiles.map((pr) => (
+                              <SelectItem key={pr.id} value={pr.id}>{pr.full_name ?? pr.id}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                              <Download className="h-3 w-3" /> Report
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => generateReconciliationPdf(p.id, reportFilters[p.id])}>
+                              <FileText className="h-4 w-4 mr-2" /> PDF Report
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => generateReconciliationExcel(p.id, reportFilters[p.id])}>
+                              <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel Workbook
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {p.is_current && !p.is_closed && (
+                          <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => openCloseDialog(p)}>
+                            <Lock className="h-3 w-3" /> Close
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

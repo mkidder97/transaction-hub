@@ -816,6 +816,55 @@ const Matching = () => {
     setMessageText("");
   };
 
+  /* ── Bulk message helpers ───────────────────────────────────── */
+  const openBulkMessageDialog = () => {
+    const targets: MessageTarget[] = [];
+    for (const tx of orphanTxs) {
+      if (selectedOrphans.has(tx.id) && tx.user_id) {
+        targets.push({
+          id: tx.id,
+          user_id: tx.user_id,
+          vendor: tx.vendor_normalized ?? tx.vendor_raw ?? "unknown",
+          amount: tx.amount,
+          date: tx.transaction_date,
+          employeeName: tx.user?.full_name ?? null,
+          transaction_id: tx.id,
+        });
+      }
+    }
+    if (targets.length === 0) {
+      toast.error("No valid employees selected");
+      return;
+    }
+    const count = targets.length;
+    setBulkMessageText(
+      `Hi, we're missing receipts for ${count > 1 ? "some" : "a"} recent charge${count > 1 ? "s" : ""} on your card. Could you please upload ${count > 1 ? "them" : "it"} as soon as possible?`
+    );
+    setBulkMessageTargets(targets);
+  };
+
+  const handleSendBulkMessage = async () => {
+    if (!user || bulkMessageTargets.length === 0) return;
+    setSendingBulkMessage(true);
+    const rows = bulkMessageTargets.map((t) => ({
+      sender_id: user.id,
+      recipient_id: t.user_id!,
+      transaction_id: t.transaction_id ?? null,
+      message: bulkMessageText,
+    }));
+    const { error } = await (supabase as any)
+      .from("receipt_messages")
+      .insert(rows);
+    setSendingBulkMessage(false);
+    if (error) {
+      toast.error("Failed to send messages");
+      return;
+    }
+    toast.success(`${bulkMessageTargets.length} message${bulkMessageTargets.length === 1 ? "" : "s"} sent`);
+    setBulkMessageTargets([]);
+    setBulkMessageText("");
+    setSelectedOrphans(new Set());
+  };
 
   const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
     if (isClosed) return null;

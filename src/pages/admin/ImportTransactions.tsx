@@ -543,6 +543,23 @@ const ImportTransactions = () => {
 
           {/* Column mapping UI */}
           {csvHeaders.length > 0 && csvMapped.length === 0 && (
+            <>
+              {isAmexPreset && (
+                <div className="rounded-md border border-accent/40 bg-accent/5 p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-4 w-4 text-accent shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">Amex Business format detected</p>
+                      <p className="text-xs text-muted-foreground">
+                        Columns mapped automatically — click Apply Mapping to continue.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 text-[10px]">
+                    Auto-mapped
+                  </Badge>
+                </div>
+              )}
             <Card>
               <CardContent className="p-4 space-y-4">
                 <h3 className="text-sm font-semibold">Map CSV Columns</h3>

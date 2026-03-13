@@ -28,11 +28,25 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare, Download, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, startOfMonth, endOfMonth, format } from "date-fns";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
+import { generateReconciliationExcel } from "@/lib/generateReconciliationExcel";
 import VendorManagement from "@/components/admin/VendorManagement";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ---------- Types ----------
 

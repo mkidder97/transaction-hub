@@ -19,8 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Files } from "lucide-react";
+import { Download, Files, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { generateReceiptReviewPdf } from "@/lib/generateReceiptReviewPdf";
 
 interface Period {
   id: string;
@@ -68,6 +69,7 @@ const AdminReceipts = () => {
   const [matchFilter, setMatchFilter] = useState("all");
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     supabase
@@ -226,9 +228,29 @@ const AdminReceipts = () => {
           </SelectContent>
         </Select>
 
-        <Button variant="outline" className="gap-2 ml-auto" onClick={handleCsvExport}>
-          <Download className="h-4 w-4" /> Download CSV
-        </Button>
+        <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            className="gap-2"
+            disabled={receipts.length === 0 || generating}
+            onClick={async () => {
+              setGenerating(true);
+              try {
+                await generateReceiptReviewPdf(periodId);
+              } catch (e: any) {
+                toast.error(e?.message || "Failed to generate PDF");
+              } finally {
+                setGenerating(false);
+              }
+            }}
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            Receipt Review PDF
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={handleCsvExport}>
+            <Download className="h-4 w-4" /> Download CSV
+          </Button>
+        </div>
       </div>
 
       {/* Table */}

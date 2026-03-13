@@ -11,15 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Receipt, CheckCircle, Flag, FileX, Clock } from "lucide-react";
+import { Receipt, CheckCircle, Flag, FileX, Clock, Search, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 
 interface StatCards {
   total: number;
-  approved: number;
-  flagged: number;
-  unmatched: number;
+  matched: number;
+  needsReview: number;
+  noMatch: number;
+  txWithoutReceipt: number;
 }
 
 interface RecentReceipt {
@@ -61,7 +62,7 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [periodName, setPeriodName] = useState<string | null>(null);
-  const [stats, setStats] = useState<StatCards>({ total: 0, approved: 0, flagged: 0, unmatched: 0 });
+  const [stats, setStats] = useState<StatCards>({ total: 0, matched: 0, needsReview: 0, noMatch: 0, txWithoutReceipt: 0 });
   const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
   const [unmatchedTxs, setUnmatchedTxs] = useState<UnmatchedTx[]>([]);
   const [deptRows, setDeptRows] = useState<DeptRow[]>([]);
@@ -85,15 +86,17 @@ const AdminDashboard = () => {
       // Fetch all receipts for stats + dept breakdown
       const { data: allReceipts } = await supabase
         .from("receipts")
-        .select("status, match_status, user_id, employee:profiles!receipts_user_id_fkey(department)")
+        .select("status, match_status, duplicate_status, user_id, employee:profiles!receipts_user_id_fkey(department)")
         .eq("statement_period_id", pid);
 
       if (allReceipts) {
+        const notDupe = allReceipts.filter((r) => r.duplicate_status !== "confirmed_duplicate");
         setStats({
           total: allReceipts.length,
-          approved: allReceipts.filter((r) => r.status === "approved").length,
-          flagged: allReceipts.filter((r) => r.status === "flagged").length,
-          unmatched: allReceipts.filter((r) => r.match_status === "unmatched").length,
+          matched: notDupe.filter((r) => ["matched", "auto_matched", "manual_match"].includes(r.match_status)).length,
+          needsReview: notDupe.filter((r) => r.match_status === "needs_review").length,
+          noMatch: notDupe.filter((r) => r.match_status === "unmatched").length,
+          txWithoutReceipt: 0, // filled after tx query
         });
 
         // Dept breakdown
@@ -123,14 +126,15 @@ const AdminDashboard = () => {
       if (recent) setRecentReceipts(recent as unknown as RecentReceipt[]);
 
       // Unmatched transactions
-      const { data: txs } = await supabase
+      const { data: txs, count: unmatchedTxCount } = await supabase
         .from("transactions")
-        .select("id, vendor_normalized, vendor_raw, amount, card_last_four, transaction_date")
+        .select("id, vendor_normalized, vendor_raw, amount, card_last_four, transaction_date", { count: "exact" })
         .eq("statement_period_id", pid)
         .eq("match_status", "unmatched")
         .order("transaction_date", { ascending: false })
         .limit(5);
       if (txs) setUnmatchedTxs(txs as UnmatchedTx[]);
+      setStats((prev) => ({ ...prev, txWithoutReceipt: unmatchedTxCount ?? 0 }));
 
       setLoading(false);
     };
@@ -139,17 +143,18 @@ const AdminDashboard = () => {
 
   const statCards = [
     { label: "Total Receipts", value: stats.total, icon: <Receipt className="h-5 w-5" />, color: "text-foreground" },
-    { label: "Approved", value: stats.approved, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent" },
-    { label: "Flagged", value: stats.flagged, icon: <Flag className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=needs-review" },
+    { label: "Matched", value: stats.matched, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent", link: "/admin/matching?tab=matched" },
+    { label: "Needs Review", value: stats.needsReview, icon: <Search className="h-5 w-5" />, color: "text-primary", link: "/admin/matching?tab=needs-review" },
+    { label: "No Match", value: stats.noMatch, icon: <FileX className="h-5 w-5" />, color: "text-destructive", link: "/admin/matching?tab=unmatched" },
+    { label: "Tx w/o Receipt", value: stats.txWithoutReceipt, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=unmatched-tx" },
   ];
 
   if (loading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
         </div>
         <div className="grid md:grid-cols-2 gap-4">
           <Skeleton className="h-64 rounded-lg" />
@@ -167,9 +172,9 @@ const AdminDashboard = () => {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {statCards.map((s) => (
-          <Card key={s.label} className={(s as any).link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => (s as any).link && navigate((s as any).link)}>
+          <Card key={s.label} className={s.link ? "cursor-pointer hover:border-primary/30 transition-colors" : ""} onClick={() => s.link && navigate(s.link)}>
             <CardContent className="p-4 flex flex-col gap-1">
               <div className={`flex items-center gap-2 ${s.color}`}>
                 {s.icon}

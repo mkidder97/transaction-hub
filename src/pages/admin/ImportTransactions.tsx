@@ -323,6 +323,7 @@ const ImportTransactions = () => {
         setCsvFilename(null);
         setCsvStoragePath(null);
         setCsvMapping({ date: "", vendor: "", amount: "", card_last_four: "" });
+        setIsAmexPreset(false);
         if (csvRef.current) csvRef.current.value = "";
       }
     } catch (err: any) {

@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, startOfMonth, endOfMonth, format } from "date-fns";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";
@@ -393,6 +393,63 @@ const AdminSettings = () => {
                 </div>
               ))}
             </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ===== Auto Reminders ===== */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" /> Automated Receipt Reminders
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {settingsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-sm">Enable Auto-Reminders</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Automatically message employees about missing receipts
+                  </p>
+                </div>
+                <Switch
+                  checked={settingsValues["auto_reminder_enabled"] === "true"}
+                  onCheckedChange={(checked) =>
+                    setSettingsValues((prev) => ({
+                      ...prev,
+                      auto_reminder_enabled: checked ? "true" : "false",
+                    }))
+                  }
+                />
+              </div>
+              <Separator />
+              <div className="space-y-1 max-w-xs">
+                <Label className="text-xs">Days before reminder</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="90"
+                  value={settingsValues["auto_reminder_days"] ?? "7"}
+                  onChange={(e) =>
+                    setSettingsValues((prev) => ({
+                      ...prev,
+                      auto_reminder_days: e.target.value,
+                    }))
+                  }
+                  className="h-8"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  A reminder is sent if a transaction remains unmatched for this many days.
+                </p>
+              </div>
+              <Button size="sm" onClick={handleSaveSettings} disabled={settingsSaving}>
+                {settingsSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />} Save
+              </Button>
+            </>
           )}
         </CardContent>
       </Card>

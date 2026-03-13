@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -82,6 +83,19 @@ const EmployeeTransactions = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingTxRef = useRef<TransactionRow | null>(null);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Auto-open transaction from ?tx= query param
+  useEffect(() => {
+    const txParam = searchParams.get("tx");
+    if (txParam) {
+      setSelectedTxId(txParam);
+      setSearchParams((prev) => {
+        prev.delete("tx");
+        return prev;
+      }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     supabase

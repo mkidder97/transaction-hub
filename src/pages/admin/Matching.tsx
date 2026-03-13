@@ -1525,6 +1525,20 @@ const Matching = () => {
                               <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => unmatch(r.id, r.transaction_id)}>
                                 <Unlink className="h-3 w-3" />
                               </Button>
+                              {r.user_id && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openMessageDialog({
+                                  id: r.id,
+                                  user_id: r.user_id,
+                                  vendor: rv(r),
+                                  amount: ra(r),
+                                  date: rd(r),
+                                  employeeName: r.employee?.full_name ?? null,
+                                  transaction_id: r.transaction?.id,
+                                  receipt_id: r.id,
+                                })}>
+                                  <MessageSquare className="h-3 w-3" />
+                                </Button>
+                              )}
                               <ReceiptActionsMenu receiptId={r.id} status={r.status} />
                             </div>
                           )}

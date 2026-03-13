@@ -1928,6 +1928,36 @@ const Matching = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Bulk Message Dialog ─────────────────────────────────── */}
+      <Dialog open={bulkMessageTargets.length > 0} onOpenChange={(open) => { if (!open) { setBulkMessageTargets([]); setBulkMessageText(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Message {bulkMessageTargets.length} Employee{bulkMessageTargets.length === 1 ? "" : "s"}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-32 overflow-y-auto space-y-1 text-sm text-muted-foreground">
+            {bulkMessageTargets.map((t) => (
+              <p key={t.id}>
+                {t.employeeName ?? "Unknown"} — {t.vendor} · {t.amount != null ? `$${Number(t.amount).toFixed(2)}` : "—"} · {t.date ?? "—"}
+              </p>
+            ))}
+          </div>
+          <Textarea
+            value={bulkMessageText}
+            onChange={(e) => setBulkMessageText(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkMessageTargets([]); setBulkMessageText(""); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendBulkMessage} disabled={sendingBulkMessage || !bulkMessageText.trim()}>
+              {sendingBulkMessage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MessageSquare className="h-4 w-4 mr-1" />}
+              Send {bulkMessageTargets.length} Message{bulkMessageTargets.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

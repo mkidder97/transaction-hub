@@ -45,6 +45,7 @@ const adminItems = [
   { title: "Matching", url: "/admin/matching", icon: GitMerge },
   { title: "Settings", url: "/admin/settings", icon: Settings },
   { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Messages", url: "/employee/messages", icon: MessageSquare },
 ];
 
 const adminExpenseItems = [
@@ -59,7 +60,7 @@ export function AppSidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (!user || role === "admin") return;
+    if (!user) return;
     const fetchUnread = async () => {
       const { count } = await (supabase as any)
         .from("receipt_messages")

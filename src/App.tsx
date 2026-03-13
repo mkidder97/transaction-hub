@@ -56,7 +56,7 @@ const App = () => (
               <Route element={<AppLayout />}>
                 <Route path="/employee/receipts" element={<RoleGuard allowedRole="employee"><EmployeeReceipts /></RoleGuard>} />
                 <Route path="/employee/submit" element={<SubmitReceipt />} />
-                <Route path="/employee/messages" element={<RoleGuard allowedRole="employee"><EmployeeMessages /></RoleGuard>} />
+                <Route path="/employee/messages" element={<EmployeeMessages />} />
                 <Route path="/employee/transactions" element={<RoleGuard allowedRole="employee"><EmployeeTransactions /></RoleGuard>} />
               </Route>
 

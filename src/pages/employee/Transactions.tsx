@@ -90,13 +90,25 @@ const EmployeeTransactions = () => {
     const txParam = searchParams.get("tx");
     if (txParam) {
       setSelectedTxId(txParam);
-      // Clean up the URL
       setSearchParams((prev) => {
         prev.delete("tx");
         return prev;
       }, { replace: true });
     }
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    supabase
+      .from("statement_periods")
+      .select("id, name, is_current")
+      .order("start_date", { ascending: false })
+      .then(({ data }) => {
+        if (data) {
+          setPeriods(data);
+          const current = data.find((p) => p.is_current);
+          if (current) setPeriodFilter(current.id);
+        }
+      });
   }, []);
 
   const fetchTransactions = useCallback(async () => {

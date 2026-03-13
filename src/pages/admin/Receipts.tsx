@@ -19,8 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Files } from "lucide-react";
+import { Download, Files, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { generateReceiptReviewPdf } from "@/lib/generateReceiptReviewPdf";
 
 interface Period {
   id: string;

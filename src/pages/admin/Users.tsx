@@ -103,6 +103,21 @@ const AdminUsers = () => {
     fetchProfiles();
   };
 
+  const handleRoleChange = async (id: string, newRole: string) => {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", id);
+    if (error) {
+      toast.error("Failed to update role");
+      return;
+    }
+    toast.success("Role updated");
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, role: newRole } : p))
+    );
+  };
+
   const toggleActive = async (id: string, current: boolean) => {
     const { error } = await supabase
       .from("profiles")

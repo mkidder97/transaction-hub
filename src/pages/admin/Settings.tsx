@@ -338,7 +338,7 @@ const AdminSettings = () => {
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-28" />
+                  <TableHead className="w-80" />
                 </TableRow>
               </TableHeader>
               <TableBody>

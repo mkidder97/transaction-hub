@@ -52,6 +52,14 @@ const FIELD_LABELS: Record<MappableField, string> = {
   card_last_four: "Card Last 4",
 };
 
+const AMEX_PRESET: Record<MappableField, string> = {
+  date: "Date",
+  vendor: "Description",
+  amount: "Amount",
+  card_last_four: "Account #",
+};
+const AMEX_COLUMNS = ["Date", "Description", "Amount", "Card Member", "Account #"];
+
 const ImportTransactions = () => {
   const { user } = useAuth();
 

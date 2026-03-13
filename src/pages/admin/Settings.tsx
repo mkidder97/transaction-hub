@@ -126,7 +126,6 @@ const AdminSettings = () => {
     setClosePreview({
       unmatchedReceipts: r.filter((x) => x.match_status === "unmatched").length,
       txWithoutReceipt: t.filter((x) => x.match_status === "unmatched").length,
-      needsReview: r.filter((x) => x.match_status === "needs_review").length,
     });
   };
 

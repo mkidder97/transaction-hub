@@ -392,15 +392,22 @@ const ImportTransactions = () => {
         const idx = csvHeaders.indexOf(col);
         return idx >= 0 ? (vals[idx] ?? "") : "";
       };
-      return {
+      const row = {
         date: get("date"),
         vendor: get("vendor"),
         amount: get("amount").replace(/[$,]/g, ""),
         card_last_four: get("card_last_four"),
       };
+      // Amex Account # format is like "-XXXXX-XXXXX-X1234" or "3-41234-56781-1004"
+      // Extract last 4 digits only
+      if (isAmexPreset && row.card_last_four) {
+        const digits = row.card_last_four.replace(/\D/g, "");
+        row.card_last_four = digits.slice(-4);
+      }
+      return row;
     });
     setCsvMapped(mapped);
-  }, [csvRawRows, csvHeaders, csvMapping]);
+  }, [csvRawRows, csvHeaders, csvMapping, isAmexPreset]);
 
   // -- Shared editable table --
   const EditableTable = ({

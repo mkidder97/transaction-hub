@@ -74,6 +74,8 @@ const AdminReceipts = () => {
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [zipping, setZipping] = useState(false);
 
   useEffect(() => {
     supabase

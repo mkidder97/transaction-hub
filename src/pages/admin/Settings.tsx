@@ -468,13 +468,7 @@ const AdminSettings = () => {
                         <span>{closePreview.txWithoutReceipt} transaction{closePreview.txWithoutReceipt !== 1 ? "s" : ""} without receipt</span>
                       </div>
                     )}
-                    {closePreview.needsReview > 0 && (
-                      <div className="flex items-center gap-2 text-warning">
-                        <AlertTriangle className="h-4 w-4" />
-                        <span>{closePreview.needsReview} receipt{closePreview.needsReview !== 1 ? "s" : ""} pending review</span>
-                      </div>
-                    )}
-                    {closePreview.unmatchedReceipts === 0 && closePreview.txWithoutReceipt === 0 && closePreview.needsReview === 0 && (
+                    {closePreview.unmatchedReceipts === 0 && closePreview.txWithoutReceipt === 0 && (
                       <p className="text-accent">All receipts and transactions are matched. Ready to close.</p>
                     )}
                   </div>

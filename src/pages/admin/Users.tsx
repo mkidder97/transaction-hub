@@ -177,16 +177,18 @@ const AdminUsers = () => {
                   <TableCell className="text-sm">{p.email ?? "—"}</TableCell>
                   <TableCell className="text-sm">{p.department ?? "—"}</TableCell>
                   <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={`text-[10px] px-1.5 py-0 ${
-                        p.role === "admin"
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted text-muted-foreground"
-                      }`}
+                    <Select
+                      value={p.role}
+                      onValueChange={(newRole) => handleRoleChange(p.id, newRole)}
                     >
-                      {p.role}
-                    </Badge>
+                      <SelectTrigger className="h-7 w-28 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="employee">Employee</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {p.card_last_four ? `•••• ${p.card_last_four}` : "—"}

@@ -202,7 +202,8 @@ export async function generateReconciliationPdf(periodId: string, userId?: strin
   if (!newTab) {
     const a = document.createElement("a");
     a.href = blobUrl;
-    a.download = `reconciliation-${period.name.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+    const namePart = employeeName ? `-${employeeName.toLowerCase()}` : "";
+    a.download = `reconciliation-${period.name.replace(/\s+/g, "-").toLowerCase()}${namePart}.pdf`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

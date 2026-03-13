@@ -355,11 +355,43 @@ const AdminSettings = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {p.is_current && !p.is_closed && (
-                        <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => openCloseDialog(p)}>
-                          <Lock className="h-3 w-3" /> Close Period
-                        </Button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={reportFilters[p.id] ?? "__all__"}
+                          onValueChange={(v) => setReportFilters((prev) => ({ ...prev, [p.id]: v === "__all__" ? undefined : v }))}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-[140px]">
+                            <SelectValue placeholder="All Employees" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All Employees</SelectItem>
+                            {profiles.map((pr) => (
+                              <SelectItem key={pr.id} value={pr.id}>{pr.full_name ?? pr.id}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
+                              <Download className="h-3 w-3" /> Report
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => generateReconciliationPdf(p.id, reportFilters[p.id])}>
+                              <FileText className="h-4 w-4 mr-2" /> PDF Report
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => generateReconciliationExcel(p.id, reportFilters[p.id])}>
+                              <FileSpreadsheet className="h-4 w-4 mr-2" /> Excel Workbook
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        {p.is_current && !p.is_closed && (
+                          <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => openCloseDialog(p)}>
+                            <Lock className="h-3 w-3" /> Close
+                          </Button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

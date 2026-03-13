@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -19,9 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Files, FileText, Loader2 } from "lucide-react";
+import { Download, Files, FileText, Loader2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { generateReceiptReviewPdf } from "@/lib/generateReceiptReviewPdf";
+import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
+import JSZip from "jszip";
 
 interface Period {
   id: string;
@@ -42,6 +45,7 @@ interface ReceiptRow {
   match_confidence: number | null;
   flag_reason: string | null;
   photo_url: string | null;
+  storage_path: string | null;
   created_at: string;
   employee: { full_name: string | null; card_last_four: string | null } | null;
   category: { name: string } | null;

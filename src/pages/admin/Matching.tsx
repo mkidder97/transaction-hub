@@ -281,6 +281,7 @@ function ExtractedIndicator({ receipt }: { receipt: ReceiptRow }) {
 
 /* ── Component ───────────────────────────────────────────────────── */
 const Matching = () => {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") || "unmatched";
 

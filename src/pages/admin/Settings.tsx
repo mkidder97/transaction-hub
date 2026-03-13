@@ -64,7 +64,6 @@ interface AppSetting {
 interface ClosePreview {
   unmatchedReceipts: number;
   txWithoutReceipt: number;
-  needsReview: number;
 }
 
 // ========== Component ==========

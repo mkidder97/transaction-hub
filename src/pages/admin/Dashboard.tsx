@@ -143,9 +143,10 @@ const AdminDashboard = () => {
 
   const statCards = [
     { label: "Total Receipts", value: stats.total, icon: <Receipt className="h-5 w-5" />, color: "text-foreground" },
-    { label: "Approved", value: stats.approved, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent" },
-    { label: "Flagged", value: stats.flagged, icon: <Flag className="h-5 w-5" />, color: "text-destructive" },
-    { label: "Unmatched", value: stats.unmatched, icon: <FileX className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=needs-review" },
+    { label: "Matched", value: stats.matched, icon: <CheckCircle className="h-5 w-5" />, color: "text-accent", link: "/admin/matching?tab=matched" },
+    { label: "Needs Review", value: stats.needsReview, icon: <Search className="h-5 w-5" />, color: "text-primary", link: "/admin/matching?tab=needs-review" },
+    { label: "No Match", value: stats.noMatch, icon: <FileX className="h-5 w-5" />, color: "text-destructive", link: "/admin/matching?tab=unmatched" },
+    { label: "Tx w/o Receipt", value: stats.txWithoutReceipt, icon: <AlertTriangle className="h-5 w-5" />, color: "text-warning", link: "/admin/matching?tab=unmatched-tx" },
   ];
 
   if (loading) {

@@ -628,6 +628,7 @@ const ImportTransactions = () => {
                 </Button>
               </CardContent>
             </Card>
+            </>
           )}
 
           {/* Mapped preview + confirm */}

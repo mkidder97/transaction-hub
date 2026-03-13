@@ -126,14 +126,15 @@ const AdminDashboard = () => {
       if (recent) setRecentReceipts(recent as unknown as RecentReceipt[]);
 
       // Unmatched transactions
-      const { data: txs } = await supabase
+      const { data: txs, count: unmatchedTxCount } = await supabase
         .from("transactions")
-        .select("id, vendor_normalized, vendor_raw, amount, card_last_four, transaction_date")
+        .select("id, vendor_normalized, vendor_raw, amount, card_last_four, transaction_date", { count: "exact" })
         .eq("statement_period_id", pid)
         .eq("match_status", "unmatched")
         .order("transaction_date", { ascending: false })
         .limit(5);
       if (txs) setUnmatchedTxs(txs as UnmatchedTx[]);
+      setStats((prev) => ({ ...prev, txWithoutReceipt: unmatchedTxCount ?? 0 }));
 
       setLoading(false);
     };

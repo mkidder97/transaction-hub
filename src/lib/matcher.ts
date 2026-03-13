@@ -11,7 +11,7 @@ export interface MatchCandidate {
 export interface MatchResult {
   transactionId: string | null;
   score: number;
-  status: "matched" | "needs_review" | "no_match";
+  status: "matched" | "no_match";
   suggestions: MatchCandidate[];
 }
 
@@ -65,13 +65,10 @@ export async function matchReceiptToTransactions(
     (receipt.vendor_confirmed as string | null) ??
     (receipt.vendor_extracted as string | null);
 
-  // Fix C: Don't hard-exit on missing amount — degrade gracefully
-  // If we have no amount AND no vendor AND no date, there's truly nothing to match on
   if (rAmount == null && !rVendor && !rDate) {
     return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
   }
 
-  // Fix B: Filter transactions by statement_period_id
   const periodId = receipt.statement_period_id as string | null;
 
   let query = supabase
@@ -95,7 +92,7 @@ export async function matchReceiptToTransactions(
     const txAmount = tx.amount as number | null;
     const txDateStr = tx.transaction_date as string | null;
 
-    // Amount scoring (max 0.5) — scores 0 if rAmount is null
+    // Amount scoring (max 0.5)
     if (rAmount != null && txAmount != null) {
       const diff = Math.abs(txAmount - rAmount);
       if (diff <= 0.01) {
@@ -106,7 +103,6 @@ export async function matchReceiptToTransactions(
     }
 
     // Date scoring (max 0.3)
-    // If both sides have dates but are >3 days apart, treat as invalid candidate.
     if (rDate && txDateStr) {
       const txDate = new Date(txDateStr);
       const daysDiff = Math.abs(
@@ -139,7 +135,6 @@ export async function matchReceiptToTransactions(
     return { transactionId: null, score: 0, status: "no_match", suggestions: [] };
   }
 
-  // Sort descending by score
   scored.sort((a, b) => b.score - a.score);
   const top3 = scored.slice(0, 3).map((s) => ({
     ...s,
@@ -148,7 +143,7 @@ export async function matchReceiptToTransactions(
 
   const best = scored[0];
 
-  // Recompute date score for best candidate — require date agreement for auto-match
+  // Recompute date score for best candidate
   const bestTx = transactions.find(tx => tx.id === best.transactionId);
   const bestDateStr = bestTx?.transaction_date as string | null;
   let bestDateScore = 0;
@@ -160,8 +155,8 @@ export async function matchReceiptToTransactions(
 
   if (best.score >= 0.7 && bestDateScore > 0)
     return { transactionId: best.transactionId, score: best.score, status: "matched", suggestions: top3 };
-  if (best.score >= 0.4)
-    return { transactionId: best.transactionId, score: best.score, status: "needs_review", suggestions: top3 };
+
+  // Everything below threshold → no_match (but still return suggestions for manual search)
   return { transactionId: null, score: best.score, status: "no_match", suggestions: top3 };
 }
 
@@ -169,8 +164,7 @@ export async function matchReceiptToTransactions(
 
 export interface PeriodMatchSummary {
   matched: number;
-  needs_review: number;
-  skipped: number;
+  noMatch: number;
 }
 
 export async function runMatchingForPeriod(
@@ -180,20 +174,18 @@ export async function runMatchingForPeriod(
     .from("receipts")
     .select("id")
     .eq("statement_period_id", periodId)
-    .in("match_status", ["unmatched", "needs_review"]);
+    .eq("match_status", "unmatched");
 
   if (!receipts || receipts.length === 0)
-    return { matched: 0, needs_review: 0, skipped: 0 };
+    return { matched: 0, noMatch: 0 };
 
   let matched = 0;
-  let needs_review = 0;
-  let skipped = 0;
+  let noMatch = 0;
 
   for (const r of receipts) {
     const result = await matchReceiptToTransactions(r.id);
 
     if (result.status === "matched" && result.transactionId) {
-      // Fix A: Set transaction_id, clear match_suggestions
       await supabase
         .from("receipts")
         .update({
@@ -214,33 +206,21 @@ export async function runMatchingForPeriod(
         .eq("id", result.transactionId);
 
       matched++;
-    } else if (result.status === "needs_review" && result.suggestions.length > 0) {
-      // Fix A: Write match_suggestions, do NOT set transaction_id
-      await supabase
-        .from("receipts")
-        .update({
-          match_status: "needs_review",
-          match_confidence: result.score,
-          match_suggestions: result.suggestions as unknown as any,
-          transaction_id: null,
-        })
-        .eq("id", r.id);
-
-      needs_review++;
     } else {
+      // Store suggestions for manual "Find Transaction" but keep as unmatched
       await supabase
         .from("receipts")
         .update({
           match_status: "unmatched",
           transaction_id: null,
           match_confidence: null,
-          match_suggestions: null,
+          match_suggestions: result.suggestions.length > 0 ? (result.suggestions as unknown as any) : null,
         })
         .eq("id", r.id);
 
-      skipped++;
+      noMatch++;
     }
   }
 
-  return { matched, needs_review, skipped };
+  return { matched, noMatch };
 }

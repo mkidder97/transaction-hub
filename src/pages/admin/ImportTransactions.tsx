@@ -88,6 +88,7 @@ const ImportTransactions = () => {
   const [csvStoragePath, setCsvStoragePath] = useState<string | null>(null);
   const [csvImporting, setCsvImporting] = useState(false);
   const csvRef = useRef<HTMLInputElement>(null);
+  const [isAmexPreset, setIsAmexPreset] = useState(false);
 
   // Import history state
   const [batches, setBatches] = useState<ImportBatch[]>([]);

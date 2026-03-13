@@ -325,6 +325,28 @@ const AdminReceipts = () => {
         </div>
       </div>
 
+      {/* Selection action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2">
+          <span className="text-sm font-medium">
+            {selected.size} receipt(s) selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={zipping}
+            onClick={handleDownloadZip}
+          >
+            {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+            Download ZIP
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="space-y-2">
@@ -342,6 +364,9 @@ const AdminReceipts = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                </TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Vendor</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
@@ -359,7 +384,10 @@ const AdminReceipts = () => {
                 const amount = r.amount_confirmed ?? r.amount_extracted;
                 const date = r.date_confirmed ?? r.date_extracted;
                 return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleOne(r.id)} />
+                    </TableCell>
                     <TableCell className="text-sm font-medium">{(r.employee as any)?.full_name ?? "—"}</TableCell>
                     <TableCell className="text-sm">{vendor}</TableCell>
                     <TableCell className="text-sm text-right font-medium">{fmt(amount ?? null)}</TableCell>

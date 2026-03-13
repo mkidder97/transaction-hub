@@ -28,7 +28,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle } from "lucide-react";
+import { Loader2, Plus, Lock, CalendarDays, Tag, Settings2, BookOpen, AlertTriangle, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { addMonths, startOfMonth, endOfMonth, format } from "date-fns";
 import { generateReconciliationPdf } from "@/lib/generateReconciliationPdf";

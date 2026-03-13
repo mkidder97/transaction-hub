@@ -357,6 +357,12 @@ const Matching = () => {
   // Bulk selection
   const [selectedUnmatched, setSelectedUnmatched] = useState<Set<string>>(new Set());
   const [selectedMatched, setSelectedMatched] = useState<Set<string>>(new Set());
+  const [selectedOrphans, setSelectedOrphans] = useState<Set<string>>(new Set());
+
+  // Bulk message dialog
+  const [bulkMessageTargets, setBulkMessageTargets] = useState<MessageTarget[]>([]);
+  const [bulkMessageText, setBulkMessageText] = useState("");
+  const [sendingBulkMessage, setSendingBulkMessage] = useState(false);
 
   /* ── Fetch vendor & employee options ────────────────────────── */
   const [pdfGenerating, setPdfGenerating] = useState(false);
@@ -810,6 +816,55 @@ const Matching = () => {
     setMessageText("");
   };
 
+  /* ── Bulk message helpers ───────────────────────────────────── */
+  const openBulkMessageDialog = () => {
+    const targets: MessageTarget[] = [];
+    for (const tx of orphanTxs) {
+      if (selectedOrphans.has(tx.id) && tx.user_id) {
+        targets.push({
+          id: tx.id,
+          user_id: tx.user_id,
+          vendor: tx.vendor_normalized ?? tx.vendor_raw ?? "unknown",
+          amount: tx.amount,
+          date: tx.transaction_date,
+          employeeName: tx.user?.full_name ?? null,
+          transaction_id: tx.id,
+        });
+      }
+    }
+    if (targets.length === 0) {
+      toast.error("No valid employees selected");
+      return;
+    }
+    const count = targets.length;
+    setBulkMessageText(
+      `Hi, we're missing receipts for ${count > 1 ? "some" : "a"} recent charge${count > 1 ? "s" : ""} on your card. Could you please upload ${count > 1 ? "them" : "it"} as soon as possible?`
+    );
+    setBulkMessageTargets(targets);
+  };
+
+  const handleSendBulkMessage = async () => {
+    if (!user || bulkMessageTargets.length === 0) return;
+    setSendingBulkMessage(true);
+    const rows = bulkMessageTargets.map((t) => ({
+      sender_id: user.id,
+      recipient_id: t.user_id!,
+      transaction_id: t.transaction_id ?? null,
+      message: bulkMessageText,
+    }));
+    const { error } = await (supabase as any)
+      .from("receipt_messages")
+      .insert(rows);
+    setSendingBulkMessage(false);
+    if (error) {
+      toast.error("Failed to send messages");
+      return;
+    }
+    toast.success(`${bulkMessageTargets.length} message${bulkMessageTargets.length === 1 ? "" : "s"} sent`);
+    setBulkMessageTargets([]);
+    setBulkMessageText("");
+    setSelectedOrphans(new Set());
+  };
 
   const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
     if (isClosed) return null;
@@ -1097,6 +1152,7 @@ const Matching = () => {
               setFilterEmployee("");
               setSelectedUnmatched(new Set());
               setSelectedMatched(new Set());
+              setSelectedOrphans(new Set());
             }}
           >
             <CardContent className="p-4 flex flex-col gap-1">
@@ -1388,10 +1444,35 @@ const Matching = () => {
             </Card>
           ) : (
             <div className="space-y-1">
+              {/* Bulk action bar for orphans */}
+              {selectedOrphans.size > 0 && (
+                <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3 mb-2">
+                  <span className="text-sm font-medium">{selectedOrphans.size} selected</span>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={openBulkMessageDialog}>
+                    <MessageSquare className="h-3 w-3" /> Message Selected
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedOrphans(new Set())}>
+                    Clear
+                  </Button>
+                </div>
+              )}
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={pagedOrphans.length > 0 && pagedOrphans.every((tx) => selectedOrphans.has(tx.id))}
+                          onCheckedChange={() => {
+                            const allSelected = pagedOrphans.every((tx) => selectedOrphans.has(tx.id));
+                            if (allSelected) {
+                              setSelectedOrphans(new Set());
+                            } else {
+                              setSelectedOrphans(new Set(pagedOrphans.map((tx) => tx.id)));
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead>Employee</TableHead>
                       <TableHead>Vendor</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
@@ -1403,6 +1484,12 @@ const Matching = () => {
                   <TableBody>
                     {pagedOrphans.map((tx) => (
                       <TableRow key={tx.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedOrphans.has(tx.id)}
+                            onCheckedChange={() => toggleSelect(tx.id, selectedOrphans, setSelectedOrphans)}
+                          />
+                        </TableCell>
                         <TableCell className="text-sm">{tx.user?.full_name ?? "—"}</TableCell>
                         <TableCell className="text-sm font-medium">{tx.vendor_normalized ?? tx.vendor_raw ?? "—"}</TableCell>
                         <TableCell className="text-sm text-right font-medium">{fmt(tx.amount)}</TableCell>
@@ -1837,6 +1924,36 @@ const Matching = () => {
             <Button onClick={handleSendMessage} disabled={sendingMessage || !messageText.trim() || !messageTx?.user_id}>
               {sendingMessage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MessageSquare className="h-4 w-4 mr-1" />}
               Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Bulk Message Dialog ─────────────────────────────────── */}
+      <Dialog open={bulkMessageTargets.length > 0} onOpenChange={(open) => { if (!open) { setBulkMessageTargets([]); setBulkMessageText(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Message {bulkMessageTargets.length} Employee{bulkMessageTargets.length === 1 ? "" : "s"}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-32 overflow-y-auto space-y-1 text-sm text-muted-foreground">
+            {bulkMessageTargets.map((t) => (
+              <p key={t.id}>
+                {t.employeeName ?? "Unknown"} — {t.vendor} · {t.amount != null ? `$${Number(t.amount).toFixed(2)}` : "—"} · {t.date ?? "—"}
+              </p>
+            ))}
+          </div>
+          <Textarea
+            value={bulkMessageText}
+            onChange={(e) => setBulkMessageText(e.target.value)}
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkMessageTargets([]); setBulkMessageText(""); }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSendBulkMessage} disabled={sendingBulkMessage || !bulkMessageText.trim()}>
+              {sendingBulkMessage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MessageSquare className="h-4 w-4 mr-1" />}
+              Send {bulkMessageTargets.length} Message{bulkMessageTargets.length === 1 ? "" : "s"}
             </Button>
           </DialogFooter>
         </DialogContent>

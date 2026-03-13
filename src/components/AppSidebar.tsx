@@ -60,7 +60,7 @@ export function AppSidebar() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (!user || role === "admin") return;
+    if (!user) return;
     const fetchUnread = async () => {
       const { count } = await (supabase as any)
         .from("receipt_messages")

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -19,9 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Files, FileText, Loader2 } from "lucide-react";
+import { Download, Files, FileText, Loader2, Archive } from "lucide-react";
 import { toast } from "sonner";
 import { generateReceiptReviewPdf } from "@/lib/generateReceiptReviewPdf";
+import { getSignedReceiptUrl } from "@/lib/getSignedReceiptUrl";
+import JSZip from "jszip";
 
 interface Period {
   id: string;
@@ -42,6 +45,7 @@ interface ReceiptRow {
   match_confidence: number | null;
   flag_reason: string | null;
   photo_url: string | null;
+  storage_path: string | null;
   created_at: string;
   employee: { full_name: string | null; card_last_four: string | null } | null;
   category: { name: string } | null;
@@ -70,6 +74,8 @@ const AdminReceipts = () => {
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [zipping, setZipping] = useState(false);
 
   useEffect(() => {
     supabase
@@ -87,10 +93,11 @@ const AdminReceipts = () => {
 
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
+    setSelected(new Set());
     let q = supabase
       .from("receipts")
       .select(
-        "id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, flag_reason, photo_url, created_at, employee:profiles!receipts_user_id_fkey(full_name, card_last_four), category:expense_categories(name), period:statement_periods(name), transaction:transactions!receipts_transaction_id_fkey(vendor_normalized, amount, transaction_date)"
+        "id, vendor_extracted, vendor_confirmed, amount_extracted, amount_confirmed, date_extracted, date_confirmed, status, match_status, match_confidence, flag_reason, photo_url, storage_path, created_at, employee:profiles!receipts_user_id_fkey(full_name, card_last_four), category:expense_categories(name), period:statement_periods(name), transaction:transactions!receipts_transaction_id_fkey(vendor_normalized, amount, transaction_date)"
       )
       .order("created_at", { ascending: false });
 
@@ -176,6 +183,71 @@ const AdminReceipts = () => {
 
   const fmt = (n: number | null) => (n != null ? `$${Number(n).toFixed(2)}` : "—");
 
+  const handleDownloadZip = async () => {
+    setZipping(true);
+    try {
+      const zip = new JSZip();
+      const selectedReceipts = receipts.filter((r) => selected.has(r.id));
+      let added = 0;
+
+      for (const receipt of selectedReceipts) {
+        if (!receipt.storage_path) continue;
+        const signedUrl = await getSignedReceiptUrl(receipt.storage_path);
+        if (!signedUrl) continue;
+
+        const resp = await fetch(signedUrl);
+        const blob = await resp.blob();
+
+        const vendor = (receipt.vendor_confirmed ?? receipt.vendor_extracted ?? "unknown")
+          .replace(/[^a-zA-Z0-9]/g, "_").slice(0, 30);
+        const date = receipt.date_confirmed ?? receipt.date_extracted ?? "unknown";
+        const emp = ((receipt.employee as any)?.full_name ?? "employee")
+          .replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20);
+        const ext = blob.type.includes("png") ? "png" : blob.type.includes("pdf") ? "pdf" : "jpg";
+
+        zip.file(`${emp}_${vendor}_${date}.${ext}`, blob);
+        added++;
+      }
+
+      if (added === 0) {
+        toast.error("No downloadable receipt images found");
+        return;
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      const periodName = periods.find((p) => p.id === periodId)?.name ?? "receipts";
+      a.href = url;
+      a.download = `receipts-${periodName.replace(/\s+/g, "-").toLowerCase()}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${added} receipt(s)`);
+      setSelected(new Set());
+    } catch {
+      toast.error("Failed to create ZIP");
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const allSelected = receipts.length > 0 && receipts.every((r) => selected.has(r.id));
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(receipts.map((r) => r.id)));
+    }
+  };
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -253,6 +325,28 @@ const AdminReceipts = () => {
         </div>
       </div>
 
+      {/* Selection action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2">
+          <span className="text-sm font-medium">
+            {selected.size} receipt(s) selected
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={zipping}
+            onClick={handleDownloadZip}
+          >
+            {zipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+            Download ZIP
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="space-y-2">
@@ -270,6 +364,9 @@ const AdminReceipts = () => {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                </TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Vendor</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
@@ -287,7 +384,10 @@ const AdminReceipts = () => {
                 const amount = r.amount_confirmed ?? r.amount_extracted;
                 const date = r.date_confirmed ?? r.date_extracted;
                 return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} data-state={selected.has(r.id) ? "selected" : undefined}>
+                    <TableCell>
+                      <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleOne(r.id)} />
+                    </TableCell>
                     <TableCell className="text-sm font-medium">{(r.employee as any)?.full_name ?? "—"}</TableCell>
                     <TableCell className="text-sm">{vendor}</TableCell>
                     <TableCell className="text-sm text-right font-medium">{fmt(amount ?? null)}</TableCell>

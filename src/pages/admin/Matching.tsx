@@ -776,7 +776,41 @@ const Matching = () => {
     refreshAfterFlag(periodId);
   };
 
-  /* ── Receipt actions dropdown ───────────────────────────────── */
+  /* ── Open message dialog helper ─────────────────────────────── */
+  const openMessageDialog = (target: MessageTarget) => {
+    const firstName = target.employeeName?.split(" ")[0] ?? "there";
+    const vendor = target.vendor || "a";
+    const amount = target.amount != null ? `$${Number(target.amount).toFixed(2)}` : "an unknown amount";
+    const date = target.date ?? "an unknown date";
+    setMessageText(
+      `Hi ${firstName}, we're missing a receipt for your ${vendor} charge of ${amount} on ${date}. Could you please upload it as soon as possible?`
+    );
+    setMessageTx(target);
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageTx || !user || !messageTx.user_id) return;
+    setSendingMessage(true);
+    const { error } = await (supabase as any)
+      .from("receipt_messages")
+      .insert({
+        sender_id: user.id,
+        recipient_id: messageTx.user_id,
+        transaction_id: messageTx.transaction_id ?? null,
+        receipt_id: messageTx.receipt_id ?? null,
+        message: messageText,
+      });
+    setSendingMessage(false);
+    if (error) {
+      toast.error("Failed to send message");
+      return;
+    }
+    toast.success(`Message sent to ${messageTx.employeeName ?? "employee"}`);
+    setMessageTx(null);
+    setMessageText("");
+  };
+
+
   const ReceiptActionsMenu = ({ receiptId, status }: { receiptId: string; status: string }) => {
     if (isClosed) return null;
     return (

@@ -284,12 +284,6 @@ const SubmitReceipt = () => {
               match_confidence: result.score,
               receipt_id: rec.id,
             }).eq("id", result.transactionId);
-          } else if (result.status === "needs_review" && result.transactionId) {
-            await supabase.from("receipts").update({
-              match_status: "manual_match",
-              transaction_id: result.transactionId,
-              match_confidence: result.score,
-            }).eq("id", rec.id);
           }
         }
       }
